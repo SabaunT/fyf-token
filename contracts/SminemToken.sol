@@ -36,12 +36,14 @@ contract SminemToken is Ownable, ERC20Detailed, ERC20Token {
     }
 
     function excludeAccount(address account) external onlyOwner {
-        require(!_isExcluded[account], "Account is already excluded");
+        require(!_isExcluded[account], "SminemToken::account is already excluded");
         uint256 reflectedBalance = _reflectedBalances[account];
-        if(reflectedBalance > 0) {
+        if (reflectedBalance > 0) {
             uint256 tokenBalance = convertReflectedToActual(reflectedBalance);
+
             _balances[account] = tokenBalance;
-            _excludedAmount = _excludedAmount.add(_excludedAmount);
+
+            _excludedAmount = _excludedAmount.add(tokenBalance);
             _excludedReflectedAmount = _excludedReflectedAmount.add(reflectedBalance);
         }
         _isExcluded[account] = true;
@@ -178,8 +180,8 @@ contract SminemToken is Ownable, ERC20Detailed, ERC20Token {
      * The rate is used then to get the actual token balance of the account.
      */
     function _getCurrentReflectionRate() private view returns (uint256) {
-        (uint256 rSupply, uint256 tSupply) = _getCurrentSupplyValues();
-        return rSupply.div(tSupply);
+        (uint256 reflectedSupply, uint256 totalSupply) = _getCurrentSupplyValues();
+        return reflectedSupply.div(totalSupply);
     }
 
     /**
@@ -187,15 +189,20 @@ contract SminemToken is Ownable, ERC20Detailed, ERC20Token {
      *
      */
     function _getCurrentSupplyValues() private view returns (uint256, uint256) {
-        uint256 reflectSupply = _reflectTotalSupply;
-        uint256 tokenSupply = _totalSupply;
+        uint256 reflectTotalSupply = _reflectTotalSupply;
+        uint256 totalSupply = _totalSupply;
 
-        // todo exclude/include
-        if (reflectSupply < _reflectTotalSupply.div(_totalSupply)) {
+        if (_excludedAmount > totalSupply || _excludedReflectedAmount > reflectTotalSupply)
+            return (reflectTotalSupply, totalSupply);
+
+        reflectTotalSupply = reflectTotalSupply.sub(_excludedReflectedAmount);
+        totalSupply = totalSupply.sub(_excludedAmount);
+
+        if (reflectTotalSupply < _reflectTotalSupply.div(_totalSupply)) {
             // TODO why?
             return (_reflectTotalSupply, _totalSupply);
         }
-        return (reflectSupply, tokenSupply);
+        return (reflectTotalSupply, totalSupply);
     }
 
 //    function reflect(uint256 tAmount) external {
