@@ -6,6 +6,7 @@ import "../node_modules/openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
 import "../node_modules/openzeppelin-solidity/contracts/math/SafeMath.sol";
 //import "../node_modules/openzeppelin-solidity/contracts/utils/Address.sol";
 
+
 contract SminemToken is Context, Ownable, IERC20 {
     using SafeMath for uint256;
     //using Address for address;
@@ -69,8 +70,6 @@ contract SminemToken is Context, Ownable, IERC20 {
         }
     }
 
-    // ERC20Detailed functions
-
     /**
      * @dev Returns the name of the token.
      */
@@ -101,61 +100,133 @@ contract SminemToken is Context, Ownable, IERC20 {
     function decimals() public view returns (uint8) {
         return _decimals;
     }
-    
-/*
+
+    /**
+     * @dev See {IERC20-totalSupply}.
+     */
     function totalSupply() public view returns (uint256) {
         return _totalSupply;
     }
 
-    function balanceOf(address account) public view returns (uint256) {
-        if (_isExcluded[account]) return _balances[account];
-        return tokenFromReflection(_reflectedBalances[account]);
-    }
+//    function balanceOf(address account) public view returns (uint256) {
+//        if (_isExcluded[account]) return _balances[account];
+//        return tokenFromReflection(_reflectedBalances[account]);
+//    }
 
     function transfer(address recipient, uint256 amount) public returns (bool) {
         _transfer(_msgSender(), recipient, amount);
         return true;
     }
 
+    /**
+     * @dev See {IERC20-allowance}.
+     */
     function allowance(address owner, address spender) public view returns (uint256) {
         return _allowances[owner][spender];
     }
-
+// 9:13 - 9:26, 9:28 -
+    /**
+     * @dev See {IERC20-allowance}.
+     *
+     * Due to the risk of an attack, discussed here
+     * https://github.com/ethereum/EIPs/issues/20#issuecomment-263524729,
+     * before calling the function we recommend showing to a client on the front-end changes
+     * in `_allowances` state made by the `spender`. This could be done by "subscribing" on the
+     * `Approve` event. You just simply check the last emitted value of the allowance:
+     * if it's 0, it means that the `spender` has already transferred all the allowed amount.
+     */
     function approve(address spender, uint256 amount) public returns (bool) {
         _approve(_msgSender(), spender, amount);
         return true;
     }
 
-    function transferFrom(address sender, address recipient, uint256 amount) public returns (bool) {
+    /**
+     * @dev See {IERC20-transferFrom}.
+     *
+     * Emits an {Approval} event indicating the updated allowance. This is not required by the EIP.
+     * This allows applications to reconstruct the allowance for all accounts just by listening to
+     * said events. Other implementations of the EIP may not emit these events, as it isn't
+     * required by the specification.
+     *
+     * Requirements:
+     * - `sender` and `recipient` cannot be the zero address.
+     * - `sender` must have a balance of at least `amount`.
+     * - the caller must have allowance for `sender`'s tokens of at least
+     * `amount`.
+     */
+    function transferFrom(address sender, address recipient, uint256 amount)
+        public
+        returns (bool)
+    {
         _transfer(sender, recipient, amount);
-        _approve(sender, _msgSender(), _allowances[sender][_msgSender()].sub(amount, "ERC20: transfer amount exceeds allowance"));
+        _approve(sender,
+            _msgSender(),
+            _allowances[sender][_msgSender()].sub(
+                amount,
+                "SminemToken: transfer amount exceeds allowance"
+            )
+        );
         return true;
     }
 
+    /**
+     * @dev Atomically increases the allowance granted to `spender` by the caller.
+     *
+     * This is an alternative to {approve} that can be used as a mitigation for
+     * problems described in {IERC20-approve}.
+     *
+     * Emits an {Approval} event indicating the updated allowance.
+     *
+     * Requirements:
+     *
+     * - `spender` cannot be the zero address.
+     */
     function increaseAllowance(address spender, uint256 addedValue) public returns (bool) {
         _approve(_msgSender(), spender, _allowances[_msgSender()][spender].add(addedValue));
         return true;
     }
 
+    /**
+     * @dev Atomically decreases the allowance granted to `spender` by the caller.
+     *
+     * This is an alternative to {approve} that can be used as a mitigation for
+     * problems described in {IERC20-approve}.
+     *
+     * Emits an {Approval} event indicating the updated allowance.
+     *
+     * Requirements:
+     *
+     * - `spender` cannot be the zero address.
+     * - `spender` must have allowance for the caller of at least
+     * `subtractedValue`.
+     */
     function decreaseAllowance(address spender, uint256 subtractedValue) public returns (bool) {
-        _approve(_msgSender(), spender, _allowances[_msgSender()][spender].sub(subtractedValue, "ERC20: decreased allowance below zero"));
+        _approve(
+            _msgSender(),
+            spender,
+            _allowances[_msgSender()][spender].sub(
+                    subtractedValue,
+                    "SminemToken: decreased allowance below zero"
+            )
+        );
         return true;
     }
 
-    function burn(uint256 amount) public {
-        require(_msgSender() != address(0), "ERC20: burn from the zero address");
-        (uint256 rAmount, , , , , , ) = _getValues(amount);
-        _burn(_msgSender(), amount, rAmount);
-    }
+//    function burn(uint256 amount) public {
+//        require(_msgSender() != address(0), "ERC20: burn from the zero address");
+//        (uint256 rAmount, , , , , , ) = _getValues(amount);
+//        _burn(_msgSender(), amount, rAmount);
+//    }
+//
+//    function burnFrom(address account, uint256 amount) public {
+//        require(account != address(0), "ERC20: burn from the zero address");
+//        uint256 decreasedAllowance = allowance(account, _msgSender()).sub(amount, "ERC20: burn amount exceeds allowance");
+//        _approve(account, _msgSender(), decreasedAllowance);
+//        (uint256 rAmount, , , , , , ) = _getValues(amount);
+//        _burn(account, amount, rAmount);
+//    }
 
-    function burnFrom(address account, uint256 amount) public {
-        require(account != address(0), "ERC20: burn from the zero address");
-        uint256 decreasedAllowance = allowance(account, _msgSender()).sub(amount, "ERC20: burn amount exceeds allowance");
-        _approve(account, _msgSender(), decreasedAllowance);
-        (uint256 rAmount, , , , , , ) = _getValues(amount);
-        _burn(account, amount, rAmount);
-    }
-
+    /*
     function isExcluded(address account) public view returns (bool) {
         return _isExcluded[account];
     }
@@ -189,15 +260,29 @@ contract SminemToken is Context, Ownable, IERC20 {
         uint256 currentRate = _getRate();
         return rAmount.div(currentRate);
     }
+    */
 
-    function _approve(address owner, address spender, uint256 amount) private {
+    /**
+     * @dev Sets `amount` as the allowance of `spender` over the `owner`s tokens.
+     *
+     * This is internal function is equivalent to `approve`, and can be used to
+     * e.g. set automatic allowances for certain subsystems, etc.
+     *
+     * Emits an {Approval} event.
+     *
+     * Requirements:
+     *
+     * - `owner` cannot be the zero address.
+     * - `spender` cannot be the zero address.
+     */
+    function _approve(address owner, address spender, uint256 amount) internal {
         require(owner != address(0), "ERC20: approve from the zero address");
         require(spender != address(0), "ERC20: approve to the zero address");
 
         _allowances[owner][spender] = amount;
          emit Approval(owner, spender, amount);
     }
-
+/*
     function _transfer(address sender, address recipient, uint256 amount) private {
         require(sender != address(0), "ERC20: transfer from the zero address");
         require(recipient != address(0), "ERC20: transfer to the zero address");
