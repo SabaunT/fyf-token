@@ -325,42 +325,42 @@ contract SminemToken is Context, Ownable, IERC20 {
         emit Transfer(sender, recipient, tokenCleanedAmount);
     }
 
-    function _transferToExcluded(address sender, address recipient, uint256 tAmount) private {
-        (uint256 rAmount, uint256 rTransferAmount, uint256 rFee, uint256 rBurn, uint256 tTransferAmount, uint256 tFee, uint256 tBurn) = _getTransferData(tAmount);
-        _rOwned[sender] = _rOwned[sender].sub(rAmount);
-        _tOwned[recipient] = _tOwned[recipient].add(tTransferAmount);
-        _rOwned[recipient] = _rOwned[recipient].add(rTransferAmount);
-        _reflectFee(rFee, tFee);
-//        if (tBurn > 0) {
-//            _reflectBurn(rBurn, tBurn, sender);
-//        }
-        emit Transfer(sender, recipient, tTransferAmount);
-    }
-
-    function _transferFromExcluded(address sender, address recipient, uint256 tAmount) private {
-        (uint256 rAmount, uint256 rTransferAmount, uint256 rFee, uint256 rBurn, uint256 tTransferAmount, uint256 tFee, uint256 tBurn) = _getTransferData(tAmount);
-        _tOwned[sender] = _tOwned[sender].sub(tAmount);
-        _rOwned[sender] = _rOwned[sender].sub(rAmount);
-        _rOwned[recipient] = _rOwned[recipient].add(rTransferAmount);
-        _reflectFee(rFee, tFee);
-//        if (tBurn > 0) {
-//            _reflectBurn(rBurn, tBurn, sender);
-//        }
-        emit Transfer(sender, recipient, tTransferAmount);
-    }
-
-    function _transferBothExcluded(address sender, address recipient, uint256 tAmount) private {
-        (uint256 rAmount, uint256 rTransferAmount, uint256 rFee, uint256 rBurn, uint256 tTransferAmount, uint256 tFee, uint256 tBurn) = _getTransferData(tAmount);
-        _tOwned[sender] = _tOwned[sender].sub(tAmount);
-        _rOwned[sender] = _rOwned[sender].sub(rAmount);
-        _tOwned[recipient] = _tOwned[recipient].add(tTransferAmount);
-        _rOwned[recipient] = _rOwned[recipient].add(rTransferAmount);
-        _reflectFee(rFee, tFee);
-//        if (tBurn > 0) {
-//            _reflectBurn(rBurn, tBurn, sender);
-//        }
-        emit Transfer(sender, recipient, tTransferAmount);
-    }
+//    function _transferToExcluded(address sender, address recipient, uint256 tAmount) private {
+//        (uint256 rAmount, uint256 rTransferAmount, uint256 rFee, uint256 rBurn, uint256 tTransferAmount, uint256 tFee, uint256 tBurn) = _getTransferData(tAmount);
+//        _rOwned[sender] = _rOwned[sender].sub(rAmount);
+//        _tOwned[recipient] = _tOwned[recipient].add(tTransferAmount);
+//        _rOwned[recipient] = _rOwned[recipient].add(rTransferAmount);
+//        _reflectFee(rFee, tFee);
+////        if (tBurn > 0) {
+////            _reflectBurn(rBurn, tBurn, sender);
+////        }
+//        emit Transfer(sender, recipient, tTransferAmount);
+//    }
+//
+//    function _transferFromExcluded(address sender, address recipient, uint256 tAmount) private {
+//        (uint256 rAmount, uint256 rTransferAmount, uint256 rFee, uint256 rBurn, uint256 tTransferAmount, uint256 tFee, uint256 tBurn) = _getTransferData(tAmount);
+//        _tOwned[sender] = _tOwned[sender].sub(tAmount);
+//        _rOwned[sender] = _rOwned[sender].sub(rAmount);
+//        _rOwned[recipient] = _rOwned[recipient].add(rTransferAmount);
+//        _reflectFee(rFee, tFee);
+////        if (tBurn > 0) {
+////            _reflectBurn(rBurn, tBurn, sender);
+////        }
+//        emit Transfer(sender, recipient, tTransferAmount);
+//    }
+//
+//    function _transferBothExcluded(address sender, address recipient, uint256 tAmount) private {
+//        (uint256 rAmount, uint256 rTransferAmount, uint256 rFee, uint256 rBurn, uint256 tTransferAmount, uint256 tFee, uint256 tBurn) = _getTransferData(tAmount);
+//        _tOwned[sender] = _tOwned[sender].sub(tAmount);
+//        _rOwned[sender] = _rOwned[sender].sub(rAmount);
+//        _tOwned[recipient] = _tOwned[recipient].add(tTransferAmount);
+//        _rOwned[recipient] = _rOwned[recipient].add(rTransferAmount);
+//        _reflectFee(rFee, tFee);
+////        if (tBurn > 0) {
+////            _reflectBurn(rBurn, tBurn, sender);
+////        }
+//        emit Transfer(sender, recipient, tTransferAmount);
+//    }
 
     function _reflectFee(uint256 rFee, uint256 tFee) private {
         _reflectTotal = _reflectTotal.sub(rFee);

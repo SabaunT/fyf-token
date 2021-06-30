@@ -33,4 +33,6 @@ Make sure you have npx package installed globally.
 * отличие тотал supply от суммы балансов на 1-2
 * какая математика такая лежит под rTotal... Приведение в соответствие классического метода и RFI
 * почему не работает с uint16?
-6. Проверь безопасность approveя контрактов
+6. Проверь безопасность approve для контрактов
+7. Style improvement - make a different erc20 contract with all the required logic, then inherit it with some changes for the RFI mechanics.
+8. Change names after getting into deepply into the context of the protocol
