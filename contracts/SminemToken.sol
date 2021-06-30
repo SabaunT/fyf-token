@@ -1,9 +1,11 @@
 pragma solidity 0.5.7;
 
 import "../node_modules/openzeppelin-solidity/contracts/ownership/Ownable.sol";
-import "../node_modules/openzeppelin-solidity/contracts/GSN/Context.sol";
+//import "../node_modules/openzeppelin-solidity/contracts/GSN/Context.sol";
 import "../node_modules/openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
-import "../node_modules/openzeppelin-solidity/contracts/math/SafeMath.sol";
+//import "../node_modules/openzeppelin-solidity/contracts/math/SafeMath.sol";
+import "../node_modules/openzeppelin-solidity/contracts/token/ERC20/ERC20.sol";
+import "../node_modules/openzeppelin-solidity/contracts/token/ERC20/ERC20Detailed.sol";
 
 /**
  * @dev Implementation of the deflationary mechanism within ERC20 token based on
@@ -13,32 +15,30 @@ import "../node_modules/openzeppelin-solidity/contracts/math/SafeMath.sol";
  * fees from transactions made by token holders. This balance isn't stored anywhere, but
  * it's calculated using the reflection rate and reflected balance of an account.
  */
-contract SminemToken is Context, Ownable, IERC20 {
-    using SafeMath for uint256;
+contract SminemToken is Ownable, ERC20, ERC20Detailed {
 
     mapping(address => uint256) private _reflectedBalances;
-    mapping(address => uint256) private _balances;
-
-    mapping(address => mapping(address => uint256)) private _allowances;
 
 //    mapping(address => bool) private _isExcluded;
 //    address[] private _excluded;
 
     uint256 private constant _feePercent = 1;
-    uint256 private constant _MAX = ~uint256(0);
-    uint256 private constant _INITIAL_SUPPLY = 100000 * 10 ** 9;
+    //uint256 private constant _MAX = ~uint256(0);
+    //uint256 private constant _INITIAL_SUPPLY = 100000 * 10 ** 9;
     // uint256 private constant _BURN_STOP_SUPPLY = 2100 * 10 ** 9;
 
-    uint256 private _totalSupply = _INITIAL_SUPPLY;
-    uint256 private _reflectTotalSupply = (_MAX - (_MAX % _totalSupply));
+    uint256 private _totalSupply; // = _INITIAL_SUPPLY;
+    uint256 private _reflectTotalSupply; //= (_MAX - (_MAX % _totalSupply));
 
     uint256 private _feeTotal;
 
-    string private constant _name = "Sminem";
-    string private constant _symbol = "SNM";
-    uint8 private constant _decimals = 9;
-
-    constructor(address[] memory addresses, uint256[] memory amounts) public {
+    constructor(string memory name, string memory symbol, uint8 decimals)
+        ERC20Detailed(name, symbol, decimals)
+        public
+    {
+        uint256 _MAX = ~uint256(0);
+        _totalSupply = 100000 * 10**uint256(decimals); // todo check for overflows
+        _reflectTotalSupply = _MAX - (_MAX % _totalSupply);
 /*
         uint256 rDistributed = 0;
         // loop through the addresses array and send tokens to each address except the last one
@@ -95,148 +95,23 @@ contract SminemToken is Context, Ownable, IERC20 {
      * - `recipient` cannot be the zero address.
      * - the caller must have a balance of at least `amount`.
      */
-    function transfer(address recipient, uint256 amount) external returns (bool) {
+    function transfer(address recipient, uint256 amount) public returns (bool) {
         _transfer(_msgSender(), recipient, amount);
         return true;
     }
 
     /**
-     * @dev See {IERC20-allowance}.
-     *
-     * Due to the risk of an attack, discussed here
-     * https://github.com/ethereum/EIPs/issues/20#issuecomment-263524729,
-     * before calling the function we recommend showing to a client on the front-end changes
-     * in `_allowances` state made by the `spender`. This could be done by "subscribing" on the
-     * `Approve` event. You just simply check the last emitted value of the allowance:
-     * if it's 0, it means that the `spender` has already transferred all the allowed amount.
-     */
-    function approve(address spender, uint256 amount) external returns (bool) {
-        _approve(_msgSender(), spender, amount);
-        return true;
-    }
-
-    /**
-     * @dev See {IERC20-transferFrom}.
-     *
-     * Emits an {Approval} event indicating the updated allowance. This is not required by the EIP.
-     * This allows applications to reconstruct the allowance for all accounts just by listening to
-     * said events. Other implementations of the EIP may not emit these events, as it isn't
-     * required by the specification.
-     *
-     * Requirements:
-     * - `sender` and `recipient` cannot be the zero address.
-     * - `sender` must have a balance of at least `amount`.
-     * - the caller must have allowance for `sender`'s tokens of at least
-     * `amount`.
-     */
-    function transferFrom(address sender, address recipient, uint256 amount)
-        external
-        returns (bool)
-    {
-        _transfer(sender, recipient, amount);
-        _approve(sender,
-            _msgSender(),
-            _allowances[sender][_msgSender()].sub(
-                amount,
-                "SminemToken::transfer amount exceeds allowance"
-            )
-        );
-        return true;
-    }
-
-    /**
-     * @dev Atomically increases the allowance granted to `spender` by the caller.
-     *
-     * This is an alternative to {approve} that can be used as a mitigation for
-     * problems described in {IERC20-approve}.
-     *
-     * Emits an {Approval} event indicating the updated allowance.
-     *
-     * Requirements:
-     *
-     * - `spender` cannot be the zero address.
-     */
-    function increaseAllowance(address spender, uint256 addedValue) external returns (bool) {
-        _approve(_msgSender(), spender, _allowances[_msgSender()][spender].add(addedValue));
-        return true;
-    }
-
-    /**
-     * @dev Atomically decreases the allowance granted to `spender` by the caller.
-     *
-     * This is an alternative to {approve} that can be used as a mitigation for
-     * problems described in {IERC20-approve}.
-     *
-     * Emits an {Approval} event indicating the updated allowance.
-     *
-     * Requirements:
-     *
-     * - `spender` cannot be the zero address.
-     * - `spender` must have allowance for the caller of at least
-     * `subtractedValue`.
-     */
-    function decreaseAllowance(address spender, uint256 subtractedValue) external returns (bool) {
-        _approve(
-            _msgSender(),
-            spender,
-            _allowances[_msgSender()][spender].sub(
-                    subtractedValue,
-                    "SminemToken::decreased allowance below zero"
-            )
-        );
-        return true;
-    }
-
-    /**
-     * @dev Returns the name of the token.
-     */
-    function name() external view returns (string memory) {
-        return _name;
-    }
-
-    /**
-     * @dev Returns the symbol of the token, usually a shorter version of the
-     * name.
-     */
-    function symbol() external view returns (string memory) {
-        return _symbol;
-    }
-
-    /**
-     * @dev Returns the number of decimals used to get its user representation.
-     * For example, if `decimals` equals `2`, a balance of `505` tokens should
-     * be displayed to a user as `5,05` (`505 / 10 ** 2`).
-     *
-     * Tokens usually opt for a value of 18, imitating the relationship between
-     * Ether and Wei.
-     *
-     * NOTE: This information is only used for _display_ purposes: it in
-     * no way affects any of the arithmetic of the contract, including
-     * {IERC20-balanceOf} and {IERC20-transfer}.
-     */
-    function decimals() external view returns (uint8) {
-        return _decimals;
-    }
-
-    /**
      * @dev See {IERC20-totalSupply}.
      */
-    function totalSupply() external view returns (uint256) {
+    function totalSupply() public view returns (uint256) {
         return _totalSupply;
     }
 
-    function balanceOf(address account) external view returns (uint256) {
+    function balanceOf(address account) public view returns (uint256) {
         // TODO
         //        if (_isExcluded[account])
         //            return _balances[account];
         return convertReflectedToActual(_reflectedBalances[account]);
-    }
-
-    /**
-     * @dev See {IERC20-allowance}.
-     */
-    function allowance(address owner, address spender) external view returns (uint256) {
-        return _allowances[owner][spender];
     }
 
     function totalFees() external view returns (uint256) {
@@ -251,10 +126,10 @@ contract SminemToken is Context, Ownable, IERC20 {
     {
         require(tokenAmount <= _totalSupply, "SminemToken::token amount must be less than supply");
         if (!deductTransferFee) {
-            (uint256 reflectedAmount, , , , , , ) = _getTransferData(tokenAmount);
+            (uint256 reflectedAmount, , , , ) = _getTransferData(tokenAmount);
             return reflectedAmount;
         } else {
-            ( , uint256 reflectedCleanedAmount, , , , , ) = _getTransferData(tokenAmount);
+            ( , uint256 reflectedCleanedAmount, , , ) = _getTransferData(tokenAmount);
             return reflectedCleanedAmount;
         }
     }
@@ -271,41 +146,22 @@ contract SminemToken is Context, Ownable, IERC20 {
         return reflectedAmount.div(rate);
     }
 
-    /**
-     * @dev Sets `amount` as the allowance of `spender` over the `owner`s tokens.
-     *
-     * This is internal function is equivalent to `approve`, and can be used to
-     * e.g. set automatic allowances for certain subsystems, etc.
-     *
-     * Emits an {Approval} event.
-     *
-     * Requirements:
-     *
-     * - `owner` cannot be the zero address.
-     * - `spender` cannot be the zero address.
-     */
-    function _approve(address owner, address spender, uint256 amount) internal {
-        require(owner != address(0), "SminemToken::approve from the zero address");
-        require(spender != address(0), "SminemToken::approve to the zero address");
-
-        _allowances[owner][spender] = amount;
-         emit Approval(owner, spender, amount);
-    }
-
     function _transfer(address sender, address recipient, uint256 amount) internal {
         require(sender != address(0), "SminemToken::transfer from the zero address");
         require(recipient != address(0), "SminemToken::transfer to the zero address");
         require(amount > 0, "SminemToken::transfer amount must be greater than zero");
 
-        if (_isExcluded[sender] && !_isExcluded[recipient]) {
-            _transferFromExcluded(sender, recipient, amount);
-        } else if (!_isExcluded[sender] && _isExcluded[recipient]) {
-            _transferToExcluded(sender, recipient, amount);
-        } else if (_isExcluded[sender] && _isExcluded[recipient]) {
-            _transferBothExcluded(sender, recipient, amount);
-        } else {
-            _transferStandard(sender, recipient, amount);
-        }
+        _transferStandard(sender, recipient, amount);
+
+//        if (_isExcluded[sender] && !_isExcluded[recipient]) {
+//            _transferFromExcluded(sender, recipient, amount);
+//        } else if (!_isExcluded[sender] && _isExcluded[recipient]) {
+//            _transferToExcluded(sender, recipient, amount);
+//        } else if (_isExcluded[sender] && _isExcluded[recipient]) {
+//            _transferBothExcluded(sender, recipient, amount);
+//        } else {
+//            _transferStandard(sender, recipient, amount);
+//        }
     }
 
     function _transferStandard(address sender, address recipient, uint256 tAmount) private {
@@ -363,7 +219,7 @@ contract SminemToken is Context, Ownable, IERC20 {
 //    }
 
     function _reflectFee(uint256 rFee, uint256 tFee) private {
-        _reflectTotal = _reflectTotal.sub(rFee);
+        _reflectTotalSupply = _reflectTotalSupply.sub(rFee);
         _feeTotal = _feeTotal.add(tFee);
     }
 
@@ -385,13 +241,12 @@ contract SminemToken is Context, Ownable, IERC20 {
             uint256 tokenFee
         )
     {
-        (uint256 tokenCleanedAmount, uint256 tokenFee) = _getTokenTransferData(tokenAmount);
+        (tokenCleanedAmount, tokenFee) = _getTokenTransferData(tokenAmount);
         (
-            uint256 reflectedAmount,
-            uint256 reflectedCleanedAmount,
-            uint256 reflectedFee
+            reflectedAmount,
+            reflectedCleanedAmount,
+            reflectedFee
         ) = _getReflectedTransferData(tokenAmount, tokenFee);
-        return;
     }
 
     /**
@@ -399,9 +254,9 @@ contract SminemToken is Context, Ownable, IERC20 {
      *
      * By transfer data we mean fee amount and a transfer amount cleaned from fee.
      */
-    function _getTokenTransferData(uint256 tokenAmount) private view returns (uint256, uint256) {
+    function _getTokenTransferData(uint256 tokenAmount) private pure returns (uint256, uint256) {
         uint256 fee = tokenAmount.mul(_feePercent).div(100);
-        uint256 cleanedAmount = tokenAmount.sub(tFee);
+        uint256 cleanedAmount = tokenAmount.sub(fee);
 //        uint256 tBurn = 0;
 //        if (_totalSupply > _BURN_STOP_SUPPLY) {
 //            tBurn = tokenAmount.div(100);
@@ -433,7 +288,7 @@ contract SminemToken is Context, Ownable, IERC20 {
 //            rBurn = tBurn.mul(rate);
 //            reflectedCleanedAmount = reflectedCleanedAmount.sub(rBurn);
 //        }
-        return (rAmount, reflectedCleanedAmount, reflectedFee);
+        return (reflectedAmount, reflectedCleanedAmount, reflectedFee);
     }
 
     /**
@@ -442,7 +297,7 @@ contract SminemToken is Context, Ownable, IERC20 {
      * The rate is used then to get the actual token balance of the account.
      */
     function _getCurrentReflectionRate() private view returns (uint256) {
-        (, uint256 rSupply, uint256 tSupply) = _getCurrentSupplyValues();
+        (uint256 rSupply, uint256 tSupply) = _getCurrentSupplyValues();
         return rSupply.div(tSupply);
     }
 
