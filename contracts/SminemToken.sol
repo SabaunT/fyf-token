@@ -1,10 +1,7 @@
 pragma solidity 0.5.7;
 
+import "./ERC20Token.sol";
 import "../node_modules/openzeppelin-solidity/contracts/ownership/Ownable.sol";
-//import "../node_modules/openzeppelin-solidity/contracts/GSN/Context.sol";
-import "../node_modules/openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
-//import "../node_modules/openzeppelin-solidity/contracts/math/SafeMath.sol";
-import "../node_modules/openzeppelin-solidity/contracts/token/ERC20/ERC20.sol";
 import "../node_modules/openzeppelin-solidity/contracts/token/ERC20/ERC20Detailed.sol";
 
 /**
@@ -15,15 +12,13 @@ import "../node_modules/openzeppelin-solidity/contracts/token/ERC20/ERC20Detaile
  * fees from transactions made by token holders. This balance isn't stored anywhere, but
  * it's calculated using the reflection rate and reflected balance of an account.
  */
-contract SminemToken is Ownable, ERC20Detailed, ERC20 {
+contract SminemToken is Ownable, ERC20Detailed, ERC20Token {
 
     mapping(address => uint256) private _reflectedBalances;
 
     uint256 private constant _feePercent = 1;
-    
-    uint256 private _totalSupply;
-    uint256 private _reflectTotalSupply;
 
+    uint256 private _reflectTotalSupply;
     uint256 private _feeTotal;
 
     constructor(string memory name, string memory symbol, uint8 decimals, uint256 supply)
