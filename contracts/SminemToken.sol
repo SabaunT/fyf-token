@@ -14,12 +14,15 @@ import "../node_modules/openzeppelin-solidity/contracts/token/ERC20/ERC20Detaile
  */
 contract SminemToken is Ownable, ERC20Detailed, ERC20Token {
 
+    mapping (address => bool) private _isExcluded;
     mapping(address => uint256) private _reflectedBalances;
 
     uint256 private constant _feePercent = 1;
 
     uint256 private _reflectTotalSupply;
     uint256 private _feeTotal;
+    uint256 private _excludedAmount;
+    uint256 private _excludedReflectedAmount;
 
     constructor(string memory name, string memory symbol, uint8 decimals, uint256 supply)
         ERC20Detailed(name, symbol, decimals)
@@ -32,11 +35,20 @@ contract SminemToken is Ownable, ERC20Detailed, ERC20Token {
         emit Transfer(address(0), _msgSender(), _reflectTotalSupply);
     }
 
-    /**
-     * @dev An override of the classical implementation
-     */
-    function balanceOf(address account) public view returns (uint256) {
-        return convertReflectedToActual(_reflectedBalances[account]);
+    function excludeAccount(address account) external onlyOwner {
+        require(!_isExcluded[account], "Account is already excluded");
+        uint256 reflectedBalance = _reflectedBalances[account];
+        if(reflectedBalance > 0) {
+            uint256 tokenBalance = convertReflectedToActual(reflectedBalance);
+            _balances[account] = tokenBalance;
+            _excludedAmount = _excludedAmount.add(_excludedAmount);
+            _excludedReflectedAmount = _excludedReflectedAmount.add(reflectedBalance);
+        }
+        _isExcluded[account] = true;
+    }
+
+    function isExcluded(address account) external view returns (bool) {
+        return _isExcluded[account];
     }
 
     function totalFees() external view returns (uint256) {
@@ -57,6 +69,15 @@ contract SminemToken is Ownable, ERC20Detailed, ERC20Token {
             ( , uint256 reflectedCleanedAmount, , , ) = _getTransferData(tokenAmount);
             return reflectedCleanedAmount;
         }
+    }
+
+    /**
+     * @dev An override of the classical implementation
+     */
+    function balanceOf(address account) public view returns (uint256) {
+        if (_isExcluded[account])
+            return ERC20Token.balanceOf(account);
+        return convertReflectedToActual(_reflectedBalances[account]);
     }
 
     /**
