@@ -28,8 +28,10 @@ contract SminemToken is Context, Ownable, IERC20 {
     uint256 private constant _MAX = ~uint256(0);
     uint256 private constant _INITIAL_SUPPLY = 100000 * 10 ** 9;
     // uint256 private constant _BURN_STOP_SUPPLY = 2100 * 10 ** 9;
+
     uint256 private _totalSupply = _INITIAL_SUPPLY;
     uint256 private _reflectTotalSupply = (_MAX - (_MAX % _totalSupply));
+
     uint256 private _feeTotal;
 
     string private constant _name = "Sminem";
@@ -56,26 +58,29 @@ contract SminemToken is Context, Ownable, IERC20 {
     }
 
 //    function excludeAccount(address account) external onlyOwner() {
-//        require(!_isExcluded[account], "Account is already excluded");
-//        if (_reflectedBalances[account] > 0) {
-//            _balances[account] = tokenFromReflection(_reflectedBalances[account]);
+//        require(!_isExcluded[account], "SminemToken::account is already excluded");
+//        uint256 reflectedBalance = _reflectedBalances[account];
+//        if (reflectedBalance > 0) {
+//            _balances[account] = convertReflectedToActual(reflectedBalance);
+//            _excludedAmounts = _balances[account];
+//            _excludedReflectedAmounts = _excludedReflectedAmounts.add(reflectedBalance);
 //        }
 //        _isExcluded[account] = true;
-//        _excluded.push(account);
 //    }
 //
 //    function includeAccount(address account) external onlyOwner() {
-//        require(_isExcluded[account], "Account is already included");
-            // TODO rid of it
-//        for (uint256 i = 0; i < _excluded.length; i++) {
-//            if (_excluded[i] == account) {
-//                _excluded[i] = _excluded[_excluded.length - 1];
-//                _balances[account] = 0;
-//                _isExcluded[account] = false;
-//                _excluded.pop();
-//                break;
-//            }
-//        }
+//        require(_isExcluded[account], "SminemToken::account is not excluded");
+//        uint256 rate = _getCurrentReflectionRate();
+//        uint256 beforeInclusionBalance = _balances[account];
+//        uint256 beforeInclusionReflectedBalance = _reflectedBalances[account];
+//
+//        _reflectedBalances[account] = beforeInclusionBalance.mul(rate);
+//        _balances[account] = 0;
+//
+//        _excludedAmounts = _excludedAmounts.sub(beforeInclusionBalance);
+//        _excludedReflectedAmounts = _excludedReflectedAmounts.sub(beforeInclusionReflectedBalance);
+//
+//        _isExcluded[account] = false;
 //    }
 //
 //    function isExcluded(address account) external view returns (bool) {
@@ -317,7 +322,7 @@ contract SminemToken is Context, Ownable, IERC20 {
 //        if (tBurn > 0) {
 //            _reflectBurn(rBurn, tBurn, sender);
 //        }
-        emit Transfer(sender, recipient, tokenCleanedAmount); // TODO what amount is emitted?
+        emit Transfer(sender, recipient, tokenCleanedAmount);
     }
 
     function _transferToExcluded(address sender, address recipient, uint256 tAmount) private {
@@ -448,7 +453,7 @@ contract SminemToken is Context, Ownable, IERC20 {
     function _getCurrentSupplyValues() private view returns (uint256, uint256) {
         uint256 reflectSupply = _reflectTotalSupply;
         uint256 tokenSupply = _totalSupply;
-        // TODO rid of it
+
 //        for (uint256 i = 0; i < _excluded.length; i++) {
 //            if (_rOwned[_excluded[i]] > reflectSupply || _tOwned[_excluded[i]] > tokenSupply) return (_reflectTotalSupply, _totalSupply);
 //            reflectSupply = reflectSupply.sub(_rOwned[_excluded[i]]);
