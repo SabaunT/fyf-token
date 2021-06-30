@@ -190,6 +190,7 @@ contract SminemToken is Ownable, ERC20Detailed, ERC20Token {
         uint256 reflectSupply = _reflectTotalSupply;
         uint256 tokenSupply = _totalSupply;
 
+        // todo exclude/include
         if (reflectSupply < _reflectTotalSupply.div(_totalSupply)) {
             // TODO why?
             return (_reflectTotalSupply, _totalSupply);
