@@ -10,8 +10,8 @@ contract SminemToken is Context, Ownable, IERC20 {
     using SafeMath for uint256;
     //using Address for address;
 
-    mapping(address => uint256) private _rOwned;
-    mapping(address => uint256) private _tOwned;
+    mapping(address => uint256) private _reflectedBalances;
+    mapping(address => uint256) private _balances;
     mapping(address => mapping(address => uint256)) private _allowances;
 
     mapping(address => bool) private _isExcluded;
@@ -20,37 +20,37 @@ contract SminemToken is Context, Ownable, IERC20 {
     uint256 private constant _MAX = ~uint256(0);
     uint256 private constant _INITIAL_SUPPLY = 100000 * 10 ** 9;
     // uint256 private constant _BURN_STOP_SUPPLY = 2100 * 10 ** 9;
-    uint256 private _tTotal = _INITIAL_SUPPLY;
-    uint256 private _rTotal = (_MAX - (_MAX % _tTotal));
-    uint256 private _tFeeTotal;
+    uint256 private _totalSupply = _INITIAL_SUPPLY;
+    uint256 private _reflectTotal = (_MAX - (_MAX % _totalSupply));
+    uint256 private _feeTotal;
 
     string private _name = "Sminem";
     string private _symbol = "SNM";
     uint8 private _decimals = 9;
 
     constructor (address[] memory addresses, uint256[] memory amounts) public {
-        /*
+
         uint256 rDistributed = 0;
         // loop through the addresses array and send tokens to each address except the last one
         // the corresponding amount to sent is taken from the amounts array
         for(uint8 i = 0; i < addresses.length - 1; i++) {
             (uint256 rAmount, , , , , , ) = _getValues(amounts[i]);
-            _rOwned[addresses[i]] = rAmount;
+            _reflectedBalances[addresses[i]] = rAmount;
             rDistributed = rDistributed + rAmount;
             emit Transfer(address(0), addresses[i], amounts[i]);
         }
         // all remaining tokens will be sent to the last address in the addresses array
-        uint256 rRemainder = _rTotal - rDistributed;
+        uint256 rRemainder = _reflectTotal - rDistributed;
         address liQuidityWalletAddress = addresses[addresses.length - 1];
-        _rOwned[liQuidityWalletAddress] = rRemainder;
+        _reflectedBalances[liQuidityWalletAddress] = rRemainder;
         emit Transfer(address(0), liQuidityWalletAddress, tokenFromReflection(rRemainder));
-        */
+
     }
-/*
+
     function excludeAccount(address account) external onlyOwner() {
         require(!_isExcluded[account], "Account is already excluded");
-        if (_rOwned[account] > 0) {
-            _tOwned[account] = tokenFromReflection(_rOwned[account]);
+        if (_reflectedBalances[account] > 0) {
+            _balances[account] = tokenFromReflection(_reflectedBalances[account]);
         }
         _isExcluded[account] = true;
         _excluded.push(account);
@@ -61,7 +61,7 @@ contract SminemToken is Context, Ownable, IERC20 {
         for (uint256 i = 0; i < _excluded.length; i++) {
             if (_excluded[i] == account) {
                 _excluded[i] = _excluded[_excluded.length - 1];
-                _tOwned[account] = 0;
+                _balances[account] = 0;
                 _isExcluded[account] = false;
                 _excluded.pop();
                 break;
@@ -82,12 +82,12 @@ contract SminemToken is Context, Ownable, IERC20 {
     }
 
     function totalSupply() public view returns (uint256) {
-        return _tTotal;
+        return _totalSupply;
     }
 
     function balanceOf(address account) public view returns (uint256) {
-        if (_isExcluded[account]) return _tOwned[account];
-        return tokenFromReflection(_rOwned[account]);
+        if (_isExcluded[account]) return _balances[account];
+        return tokenFromReflection(_reflectedBalances[account]);
     }
 
     function transfer(address recipient, uint256 amount) public returns (bool) {
@@ -139,20 +139,20 @@ contract SminemToken is Context, Ownable, IERC20 {
     }
 
     function totalFees() public view returns (uint256) {
-        return _tFeeTotal;
+        return _feeTotal;
     }
 
     function reflect(uint256 tAmount) public {
         address sender = _msgSender();
         require(!_isExcluded[sender], "Excluded addresses cannot call this function");
         (uint256 rAmount, , , , , , ) = _getValues(tAmount);
-        _rOwned[sender] = _rOwned[sender].sub(rAmount);
-        _rTotal = _rTotal.sub(rAmount);
-        _tFeeTotal = _tFeeTotal.add(tAmount);
+        _reflectedBalances[sender] = _reflectedBalances[sender].sub(rAmount);
+        _reflectTotal = _reflectTotal.sub(rAmount);
+        _feeTotal = _feeTotal.add(tAmount);
     }
 
     function reflectionFromToken(uint256 tAmount, bool deductTransferFee) public returns (uint256) {
-        require(tAmount <= _tTotal, "Amount must be less than supply");
+        require(tAmount <= _totalSupply, "Amount must be less than supply");
         if (!deductTransferFee) {
             (uint256 rAmount, , , , , , ) = _getValues(tAmount);
             return rAmount;
@@ -163,7 +163,7 @@ contract SminemToken is Context, Ownable, IERC20 {
     }
 
     function tokenFromReflection(uint256 rAmount) public view returns (uint256) {
-        require(rAmount <= _rTotal, "Amount must be less than total reflections");
+        require(rAmount <= _reflectTotal, "Amount must be less than total reflections");
         uint256 currentRate = _getRate();
         return rAmount.div(currentRate);
     }
@@ -173,7 +173,7 @@ contract SminemToken is Context, Ownable, IERC20 {
         require(spender != address(0), "ERC20: approve to the zero address");
 
         _allowances[owner][spender] = amount;
-        // emit Approval(owner, spender, amount);
+         emit Approval(owner, spender, amount);
     }
 
     function _transfer(address sender, address recipient, uint256 amount) private {
@@ -242,13 +242,13 @@ contract SminemToken is Context, Ownable, IERC20 {
     }
 
     function _reflectFee(uint256 rFee, uint256 tFee) private {
-        _rTotal = _rTotal.sub(rFee);
-        _tFeeTotal = _tFeeTotal.add(tFee);
+        _reflectTotal = _reflectTotal.sub(rFee);
+        _feeTotal = _feeTotal.add(tFee);
     }
 
     function _reflectBurn(uint256 rBurn, uint256 tBurn, address account) private {
-        _rTotal = _rTotal.sub(rBurn);
-        _tTotal = _tTotal.sub(tBurn);
+        _reflectTotal = _reflectTotal.sub(rBurn);
+        _totalSupply = _totalSupply.sub(tBurn);
         emit ConsoleLog("burn", tBurn);
         emit Transfer(account, address(0), tBurn);
     }
@@ -265,10 +265,10 @@ contract SminemToken is Context, Ownable, IERC20 {
         uint256 tFee = tAmount.div(100);
         uint256 tTransferAmount = tAmount.sub(tFee);
         uint256 tBurn = 0;
-        if (_tTotal > _BURN_STOP_SUPPLY) {
+        if (_totalSupply > _BURN_STOP_SUPPLY) {
             tBurn = tAmount.div(100);
-            if (_tTotal < _BURN_STOP_SUPPLY.add(tBurn)) {
-                tBurn = _tTotal.sub(_BURN_STOP_SUPPLY);
+            if (_totalSupply < _BURN_STOP_SUPPLY.add(tBurn)) {
+                tBurn = _totalSupply.sub(_BURN_STOP_SUPPLY);
             }
             tTransferAmount = tTransferAmount.sub(tBurn);
         }
@@ -302,15 +302,15 @@ contract SminemToken is Context, Ownable, IERC20 {
     }
 
     function _getCurrentSupply() private view returns (string memory, uint256, uint256) {
-        uint256 rSupply = _rTotal;
-        uint256 tSupply = _tTotal;
-        //for (uint256 i = 0; i < _excluded.length; i++) {
-        //    if (_rOwned[_excluded[i]] > rSupply || _tOwned[_excluded[i]] > tSupply) return (_rTotal, _tTotal);
-        //    rSupply = rSupply.sub(_rOwned[_excluded[i]]);
-        //    tSupply = tSupply.sub(_tOwned[_excluded[i]]);
-        //}
-        if (rSupply < _rTotal.div(_tTotal)) {
-            return ("reached if", _rTotal, _tTotal);  // ??
+        uint256 rSupply = _reflectTotal;
+        uint256 tSupply = _totalSupply;
+        for (uint256 i = 0; i < _excluded.length; i++) {
+            if (_rOwned[_excluded[i]] > rSupply || _tOwned[_excluded[i]] > tSupply) return (_reflectTotal, _totalSupply);
+            rSupply = rSupply.sub(_rOwned[_excluded[i]]);
+            tSupply = tSupply.sub(_tOwned[_excluded[i]]);
+        }
+        if (rSupply < _reflectTotal.div(_totalSupply)) {
+            return ("reached if", _reflectTotal, _totalSupply);
         } 
         return ("ok", rSupply, tSupply);
     }
@@ -324,6 +324,5 @@ contract SminemToken is Context, Ownable, IERC20 {
         }
         _reflectBurn(rAmount, tAmount, account);
     }
-    */
 }
 
