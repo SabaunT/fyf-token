@@ -6,7 +6,9 @@ import "../node_modules/openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
 import "../node_modules/openzeppelin-solidity/contracts/math/SafeMath.sol";
 //import "../node_modules/openzeppelin-solidity/contracts/utils/Address.sol";
 
-// 9:13 - 9:26, 9:28 -
+// 9:13 - 9:26, 9:28 - 9:53
+// style improvement - make a different erc20 contract with all the required logic, then inherit
+// it with some changes for the RFI mechanics.
 contract SminemToken is Context, Ownable, IERC20 {
     using SafeMath for uint256;
     //using Address for address;
