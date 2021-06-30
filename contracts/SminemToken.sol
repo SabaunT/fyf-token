@@ -15,7 +15,7 @@ import "../node_modules/openzeppelin-solidity/contracts/token/ERC20/ERC20Detaile
  * fees from transactions made by token holders. This balance isn't stored anywhere, but
  * it's calculated using the reflection rate and reflected balance of an account.
  */
-contract SminemToken is Ownable, ERC20, ERC20Detailed {
+contract SminemToken is Ownable, ERC20Detailed, ERC20 {
 
     mapping(address => uint256) private _reflectedBalances;
 
@@ -37,15 +37,9 @@ contract SminemToken is Ownable, ERC20, ERC20Detailed {
         emit Transfer(address(0), _msgSender(), _reflectTotalSupply);
     }
 
-    function transfer(address recipient, uint256 amount) public returns (bool) {
-        _transfer(_msgSender(), recipient, amount);
-        return true;
-    }
-
-    function totalSupply() public view returns (uint256) {
-        return _totalSupply;
-    }
-
+    /**
+     * @dev An override of the classical implementation
+     */
     function balanceOf(address account) public view returns (uint256) {
         return convertReflectedToActual(_reflectedBalances[account]);
     }
@@ -82,6 +76,9 @@ contract SminemToken is Ownable, ERC20, ERC20Detailed {
         return reflectedAmount.div(rate);
     }
 
+    /**
+     * @dev An override of the classical implementation
+     */
     function _transfer(address sender, address recipient, uint256 amount) internal {
         require(sender != address(0), "SminemToken::transfer from the zero address");
         require(recipient != address(0), "SminemToken::transfer to the zero address");
