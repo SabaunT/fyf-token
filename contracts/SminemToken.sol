@@ -4,32 +4,37 @@ import "../node_modules/openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "../node_modules/openzeppelin-solidity/contracts/GSN/Context.sol";
 import "../node_modules/openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
 import "../node_modules/openzeppelin-solidity/contracts/math/SafeMath.sol";
-//import "../node_modules/openzeppelin-solidity/contracts/utils/Address.sol";
 
-// 9:13 - 9:26, 9:28 - 9:53
-// style improvement - make a different erc20 contract with all the required logic, then inherit
-// it with some changes for the RFI mechanics.
+/**
+ * @dev Implementation of the deflationary mechanism within ERC20 token based on
+ * https://github.com/reflectfinance/reflect-contracts/blob/main/contracts/REFLECT.sol.
+ *
+ * Term "actual" regarding token balance means a token balance of an account with earned
+ * fees from transactions made by token holders. This balance isn't stored anywhere, but
+ * it's calculated using the reflection rate and reflected balance of an account.
+ */
 contract SminemToken is Context, Ownable, IERC20 {
     using SafeMath for uint256;
-    //using Address for address;
 
     mapping(address => uint256) private _reflectedBalances;
     mapping(address => uint256) private _balances;
+
     mapping(address => mapping(address => uint256)) private _allowances;
 
-    mapping(address => bool) private _isExcluded;
-    address[] private _excluded;
+//    mapping(address => bool) private _isExcluded;
+//    address[] private _excluded;
 
+    uint256 private constant _feePercent = 1;
     uint256 private constant _MAX = ~uint256(0);
     uint256 private constant _INITIAL_SUPPLY = 100000 * 10 ** 9;
     // uint256 private constant _BURN_STOP_SUPPLY = 2100 * 10 ** 9;
     uint256 private _totalSupply = _INITIAL_SUPPLY;
-    uint256 private _reflectTotal = (_MAX - (_MAX % _totalSupply));
+    uint256 private _reflectTotalSupply = (_MAX - (_MAX % _totalSupply));
     uint256 private _feeTotal;
 
-    string private _name = "Sminem";
-    string private _symbol = "SNM";
-    uint8 private _decimals = 9;
+    string private constant _name = "Sminem";
+    string private constant _symbol = "SNM";
+    uint8 private constant _decimals = 9;
 
     constructor(address[] memory addresses, uint256[] memory amounts) public {
 /*
@@ -50,81 +55,44 @@ contract SminemToken is Context, Ownable, IERC20 {
 */
     }
 
-    function excludeAccount(address account) external onlyOwner() {
-        require(!_isExcluded[account], "Account is already excluded");
-        if (_reflectedBalances[account] > 0) {
-            _balances[account] = tokenFromReflection(_reflectedBalances[account]);
-        }
-        _isExcluded[account] = true;
-        _excluded.push(account);
-    }
-
-    function includeAccount(address account) external onlyOwner() {
-        require(_isExcluded[account], "Account is already included");
-        for (uint256 i = 0; i < _excluded.length; i++) {
-            if (_excluded[i] == account) {
-                _excluded[i] = _excluded[_excluded.length - 1];
-                _balances[account] = 0;
-                _isExcluded[account] = false;
-                _excluded.pop();
-                break;
-            }
-        }
-    }
-
-    /**
-     * @dev Returns the name of the token.
-     */
-    function name() public view returns (string memory) {
-        return _name;
-    }
-
-    /**
-     * @dev Returns the symbol of the token, usually a shorter version of the
-     * name.
-     */
-    function symbol() public view returns (string memory) {
-        return _symbol;
-    }
-
-    /**
-     * @dev Returns the number of decimals used to get its user representation.
-     * For example, if `decimals` equals `2`, a balance of `505` tokens should
-     * be displayed to a user as `5,05` (`505 / 10 ** 2`).
-     *
-     * Tokens usually opt for a value of 18, imitating the relationship between
-     * Ether and Wei.
-     *
-     * NOTE: This information is only used for _display_ purposes: it in
-     * no way affects any of the arithmetic of the contract, including
-     * {IERC20-balanceOf} and {IERC20-transfer}.
-     */
-    function decimals() public view returns (uint8) {
-        return _decimals;
-    }
-
-    /**
-     * @dev See {IERC20-totalSupply}.
-     */
-    function totalSupply() public view returns (uint256) {
-        return _totalSupply;
-    }
-
-//    function balanceOf(address account) public view returns (uint256) {
-//        if (_isExcluded[account]) return _balances[account];
-//        return tokenFromReflection(_reflectedBalances[account]);
+//    function excludeAccount(address account) external onlyOwner() {
+//        require(!_isExcluded[account], "Account is already excluded");
+//        if (_reflectedBalances[account] > 0) {
+//            _balances[account] = tokenFromReflection(_reflectedBalances[account]);
+//        }
+//        _isExcluded[account] = true;
+//        _excluded.push(account);
+//    }
+//
+//    function includeAccount(address account) external onlyOwner() {
+//        require(_isExcluded[account], "Account is already included");
+            // TODO rid of it
+//        for (uint256 i = 0; i < _excluded.length; i++) {
+//            if (_excluded[i] == account) {
+//                _excluded[i] = _excluded[_excluded.length - 1];
+//                _balances[account] = 0;
+//                _isExcluded[account] = false;
+//                _excluded.pop();
+//                break;
+//            }
+//        }
+//    }
+//
+//    function isExcluded(address account) external view returns (bool) {
+//        return _isExcluded[account];
 //    }
 
-    function transfer(address recipient, uint256 amount) public returns (bool) {
+    /**
+     * @dev See {IERC20-transfer}.
+     *
+     * Requirements:
+     *
+     * - `recipient` cannot be the zero address.
+     * - the caller must have a balance of at least `amount`.
+     */
+    function transfer(address recipient, uint256 amount) external returns (bool) {
         _transfer(_msgSender(), recipient, amount);
         return true;
-    }
-
-    /**
-     * @dev See {IERC20-allowance}.
-     */
-    function allowance(address owner, address spender) public view returns (uint256) {
-        return _allowances[owner][spender];
     }
 
     /**
@@ -137,7 +105,7 @@ contract SminemToken is Context, Ownable, IERC20 {
      * `Approve` event. You just simply check the last emitted value of the allowance:
      * if it's 0, it means that the `spender` has already transferred all the allowed amount.
      */
-    function approve(address spender, uint256 amount) public returns (bool) {
+    function approve(address spender, uint256 amount) external returns (bool) {
         _approve(_msgSender(), spender, amount);
         return true;
     }
@@ -157,7 +125,7 @@ contract SminemToken is Context, Ownable, IERC20 {
      * `amount`.
      */
     function transferFrom(address sender, address recipient, uint256 amount)
-        public
+        external
         returns (bool)
     {
         _transfer(sender, recipient, amount);
@@ -165,7 +133,7 @@ contract SminemToken is Context, Ownable, IERC20 {
             _msgSender(),
             _allowances[sender][_msgSender()].sub(
                 amount,
-                "SminemToken: transfer amount exceeds allowance"
+                "SminemToken::transfer amount exceeds allowance"
             )
         );
         return true;
@@ -183,7 +151,7 @@ contract SminemToken is Context, Ownable, IERC20 {
      *
      * - `spender` cannot be the zero address.
      */
-    function increaseAllowance(address spender, uint256 addedValue) public returns (bool) {
+    function increaseAllowance(address spender, uint256 addedValue) external returns (bool) {
         _approve(_msgSender(), spender, _allowances[_msgSender()][spender].add(addedValue));
         return true;
     }
@@ -202,67 +170,101 @@ contract SminemToken is Context, Ownable, IERC20 {
      * - `spender` must have allowance for the caller of at least
      * `subtractedValue`.
      */
-    function decreaseAllowance(address spender, uint256 subtractedValue) public returns (bool) {
+    function decreaseAllowance(address spender, uint256 subtractedValue) external returns (bool) {
         _approve(
             _msgSender(),
             spender,
             _allowances[_msgSender()][spender].sub(
                     subtractedValue,
-                    "SminemToken: decreased allowance below zero"
+                    "SminemToken::decreased allowance below zero"
             )
         );
         return true;
     }
 
-//    function burn(uint256 amount) public {
-//        require(_msgSender() != address(0), "ERC20: burn from the zero address");
-//        (uint256 rAmount, , , , , , ) = _getValues(amount);
-//        _burn(_msgSender(), amount, rAmount);
-//    }
-//
-//    function burnFrom(address account, uint256 amount) public {
-//        require(account != address(0), "ERC20: burn from the zero address");
-//        uint256 decreasedAllowance = allowance(account, _msgSender()).sub(amount, "ERC20: burn amount exceeds allowance");
-//        _approve(account, _msgSender(), decreasedAllowance);
-//        (uint256 rAmount, , , , , , ) = _getValues(amount);
-//        _burn(account, amount, rAmount);
-//    }
-
-    /*
-    function isExcluded(address account) public view returns (bool) {
-        return _isExcluded[account];
+    /**
+     * @dev Returns the name of the token.
+     */
+    function name() external view returns (string memory) {
+        return _name;
     }
 
-    function totalFees() public view returns (uint256) {
+    /**
+     * @dev Returns the symbol of the token, usually a shorter version of the
+     * name.
+     */
+    function symbol() external view returns (string memory) {
+        return _symbol;
+    }
+
+    /**
+     * @dev Returns the number of decimals used to get its user representation.
+     * For example, if `decimals` equals `2`, a balance of `505` tokens should
+     * be displayed to a user as `5,05` (`505 / 10 ** 2`).
+     *
+     * Tokens usually opt for a value of 18, imitating the relationship between
+     * Ether and Wei.
+     *
+     * NOTE: This information is only used for _display_ purposes: it in
+     * no way affects any of the arithmetic of the contract, including
+     * {IERC20-balanceOf} and {IERC20-transfer}.
+     */
+    function decimals() external view returns (uint8) {
+        return _decimals;
+    }
+
+    /**
+     * @dev See {IERC20-totalSupply}.
+     */
+    function totalSupply() external view returns (uint256) {
+        return _totalSupply;
+    }
+
+    function balanceOf(address account) external view returns (uint256) {
+        // TODO
+        //        if (_isExcluded[account])
+        //            return _balances[account];
+        return convertReflectedToActual(_reflectedBalances[account]);
+    }
+
+    /**
+     * @dev See {IERC20-allowance}.
+     */
+    function allowance(address owner, address spender) external view returns (uint256) {
+        return _allowances[owner][spender];
+    }
+
+    function totalFees() external view returns (uint256) {
         return _feeTotal;
     }
 
-    function reflect(uint256 tAmount) public {
-        address sender = _msgSender();
-        require(!_isExcluded[sender], "Excluded addresses cannot call this function");
-        (uint256 rAmount, , , , , , ) = _getValues(tAmount);
-        _reflectedBalances[sender] = _reflectedBalances[sender].sub(rAmount);
-        _reflectTotal = _reflectTotal.sub(rAmount);
-        _feeTotal = _feeTotal.add(tAmount);
-    }
-
-    function reflectionFromToken(uint256 tAmount, bool deductTransferFee) public returns (uint256) {
-        require(tAmount <= _totalSupply, "Amount must be less than supply");
+    // TODO not sure if the name states the idea. Test convertActualToReflected(
+    function convertActualToReflected(uint256 tokenAmount, bool deductTransferFee)
+        external
+        view
+        returns (uint256)
+    {
+        require(tokenAmount <= _totalSupply, "SminemToken::token amount must be less than supply");
         if (!deductTransferFee) {
-            (uint256 rAmount, , , , , , ) = _getValues(tAmount);
-            return rAmount;
+            (uint256 reflectedAmount, , , , , , ) = _getTransferData(tokenAmount);
+            return reflectedAmount;
         } else {
-            ( , uint256 rTransferAmount, , , , , ) = _getValues(tAmount);
-            return rTransferAmount;
+            ( , uint256 reflectedCleanedAmount, , , , , ) = _getTransferData(tokenAmount);
+            return reflectedCleanedAmount;
         }
     }
 
-    function tokenFromReflection(uint256 rAmount) public view returns (uint256) {
-        require(rAmount <= _reflectTotal, "Amount must be less than total reflections");
-        uint256 currentRate = _getRate();
-        return rAmount.div(currentRate);
+    /**
+     * @dev Converts reflected amount to actual token balance.
+     */
+    function convertReflectedToActual(uint256 reflectedAmount) public view returns (uint256) {
+        require(
+            reflectedAmount <= _reflectTotalSupply,
+            "SminemToken::amount must be less than total reflections"
+        );
+        uint256 rate = _getCurrentReflectionRate();
+        return reflectedAmount.div(rate);
     }
-    */
 
     /**
      * @dev Sets `amount` as the allowance of `spender` over the `owner`s tokens.
@@ -278,23 +280,22 @@ contract SminemToken is Context, Ownable, IERC20 {
      * - `spender` cannot be the zero address.
      */
     function _approve(address owner, address spender, uint256 amount) internal {
-        require(owner != address(0), "ERC20: approve from the zero address");
-        require(spender != address(0), "ERC20: approve to the zero address");
+        require(owner != address(0), "SminemToken::approve from the zero address");
+        require(spender != address(0), "SminemToken::approve to the zero address");
 
         _allowances[owner][spender] = amount;
          emit Approval(owner, spender, amount);
     }
-/*
-    function _transfer(address sender, address recipient, uint256 amount) private {
-        require(sender != address(0), "ERC20: transfer from the zero address");
-        require(recipient != address(0), "ERC20: transfer to the zero address");
-        require(amount > 0, "Transfer amount must be greater than zero");
+
+    function _transfer(address sender, address recipient, uint256 amount) internal {
+        require(sender != address(0), "SminemToken::transfer from the zero address");
+        require(recipient != address(0), "SminemToken::transfer to the zero address");
+        require(amount > 0, "SminemToken::transfer amount must be greater than zero");
+
         if (_isExcluded[sender] && !_isExcluded[recipient]) {
             _transferFromExcluded(sender, recipient, amount);
         } else if (!_isExcluded[sender] && _isExcluded[recipient]) {
             _transferToExcluded(sender, recipient, amount);
-        } else if (!_isExcluded[sender] && !_isExcluded[recipient]) {
-            _transferStandard(sender, recipient, amount);
         } else if (_isExcluded[sender] && _isExcluded[recipient]) {
             _transferBothExcluded(sender, recipient, amount);
         } else {
@@ -303,50 +304,56 @@ contract SminemToken is Context, Ownable, IERC20 {
     }
 
     function _transferStandard(address sender, address recipient, uint256 tAmount) private {
-        (uint256 rAmount, uint256 rTransferAmount, uint256 rFee, uint256 rBurn, uint256 tTransferAmount, uint256 tFee, uint256 tBurn) = _getValues(tAmount);
-        _rOwned[sender] = _rOwned[sender].sub(rAmount);
-        _rOwned[recipient] = _rOwned[recipient].add(rTransferAmount);
-        _reflectFee(rFee, tFee);
-        if (tBurn > 0) {
-            _reflectBurn(rBurn, tBurn, sender);
-        }
-        emit Transfer(sender, recipient, tTransferAmount);
+        (
+            uint256 reflectedAmount,
+            uint256 reflectedCleanedAmount,
+            uint256 reflectedFee,
+            uint256 tokenCleanedAmount,
+            uint256 tokenFee
+        ) = _getTransferData(tAmount);
+        _reflectedBalances[sender] = _reflectedBalances[sender].sub(reflectedAmount);
+        _reflectedBalances[recipient] = _reflectedBalances[recipient].add(reflectedCleanedAmount);
+        _reflectFee(reflectedFee, tokenFee);
+//        if (tBurn > 0) {
+//            _reflectBurn(rBurn, tBurn, sender);
+//        }
+        emit Transfer(sender, recipient, tokenCleanedAmount); // TODO what amount is emitted?
     }
 
     function _transferToExcluded(address sender, address recipient, uint256 tAmount) private {
-        (uint256 rAmount, uint256 rTransferAmount, uint256 rFee, uint256 rBurn, uint256 tTransferAmount, uint256 tFee, uint256 tBurn) = _getValues(tAmount);
+        (uint256 rAmount, uint256 rTransferAmount, uint256 rFee, uint256 rBurn, uint256 tTransferAmount, uint256 tFee, uint256 tBurn) = _getTransferData(tAmount);
         _rOwned[sender] = _rOwned[sender].sub(rAmount);
         _tOwned[recipient] = _tOwned[recipient].add(tTransferAmount);
         _rOwned[recipient] = _rOwned[recipient].add(rTransferAmount);
         _reflectFee(rFee, tFee);
-        if (tBurn > 0) {
-            _reflectBurn(rBurn, tBurn, sender);
-        }
+//        if (tBurn > 0) {
+//            _reflectBurn(rBurn, tBurn, sender);
+//        }
         emit Transfer(sender, recipient, tTransferAmount);
     }
 
     function _transferFromExcluded(address sender, address recipient, uint256 tAmount) private {
-        (uint256 rAmount, uint256 rTransferAmount, uint256 rFee, uint256 rBurn, uint256 tTransferAmount, uint256 tFee, uint256 tBurn) = _getValues(tAmount);
+        (uint256 rAmount, uint256 rTransferAmount, uint256 rFee, uint256 rBurn, uint256 tTransferAmount, uint256 tFee, uint256 tBurn) = _getTransferData(tAmount);
         _tOwned[sender] = _tOwned[sender].sub(tAmount);
         _rOwned[sender] = _rOwned[sender].sub(rAmount);
         _rOwned[recipient] = _rOwned[recipient].add(rTransferAmount);
         _reflectFee(rFee, tFee);
-        if (tBurn > 0) {
-            _reflectBurn(rBurn, tBurn, sender);
-        }
+//        if (tBurn > 0) {
+//            _reflectBurn(rBurn, tBurn, sender);
+//        }
         emit Transfer(sender, recipient, tTransferAmount);
     }
 
     function _transferBothExcluded(address sender, address recipient, uint256 tAmount) private {
-        (uint256 rAmount, uint256 rTransferAmount, uint256 rFee, uint256 rBurn, uint256 tTransferAmount, uint256 tFee, uint256 tBurn) = _getValues(tAmount);
+        (uint256 rAmount, uint256 rTransferAmount, uint256 rFee, uint256 rBurn, uint256 tTransferAmount, uint256 tFee, uint256 tBurn) = _getTransferData(tAmount);
         _tOwned[sender] = _tOwned[sender].sub(tAmount);
         _rOwned[sender] = _rOwned[sender].sub(rAmount);
         _tOwned[recipient] = _tOwned[recipient].add(tTransferAmount);
         _rOwned[recipient] = _rOwned[recipient].add(rTransferAmount);
         _reflectFee(rFee, tFee);
-        if (tBurn > 0) {
-            _reflectBurn(rBurn, tBurn, sender);
-        }
+//        if (tBurn > 0) {
+//            _reflectBurn(rBurn, tBurn, sender);
+//        }
         emit Transfer(sender, recipient, tTransferAmount);
     }
 
@@ -355,84 +362,143 @@ contract SminemToken is Context, Ownable, IERC20 {
         _feeTotal = _feeTotal.add(tFee);
     }
 
-    function _reflectBurn(uint256 rBurn, uint256 tBurn, address account) private {
-        _reflectTotal = _reflectTotal.sub(rBurn);
-        _totalSupply = _totalSupply.sub(tBurn);
-        emit ConsoleLog("burn", tBurn);
-        emit Transfer(account, address(0), tBurn);
+    /**
+     * @dev Gets a "common" and a reflected transfer data.
+     *
+     * For more information see:
+     * - {SminemToken-_getTokenTransferData};
+     * - {SminemToken-_getReflectedTransferData}.
+     */
+    function _getTransferData(uint256 tokenAmount)
+        private
+        view
+        returns (
+            uint256 reflectedAmount,
+            uint256 reflectedCleanedAmount,
+            uint256 reflectedFee,
+            uint256 tokenCleanedAmount,
+            uint256 tokenFee
+        )
+    {
+        (uint256 tokenCleanedAmount, uint256 tokenFee) = _getTokenTransferData(tokenAmount);
+        (
+            uint256 reflectedAmount,
+            uint256 reflectedCleanedAmount,
+            uint256 reflectedFee
+        ) = _getReflectedTransferData(tokenAmount, tokenFee);
+        return;
     }
 
-    function _getValues(uint256 tAmount) private returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256) {
-        (uint256 tTransferAmount, uint256 tFee, uint256 tBurn) = _getTValues(tAmount);
-        emit DebugTValues(tTransferAmount, tFee, tBurn);
-        (uint256 rAmount, uint256 rTransferAmount, uint256 rFee, uint256 rBurn) = _getRValues(tAmount, tFee, tBurn);
-        emit DebugRValues(rAmount, rTransferAmount, rFee, rBurn);
-        return (rAmount, rTransferAmount, rFee, rBurn, tTransferAmount, tFee, tBurn);
+    /**
+     * @dev Gets transfer data from the token transfer amount.
+     *
+     * By transfer data we mean fee amount and a transfer amount cleaned from fee.
+     */
+    function _getTokenTransferData(uint256 tokenAmount) private view returns (uint256, uint256) {
+        uint256 fee = tokenAmount.mul(_feePercent).div(100);
+        uint256 cleanedAmount = tokenAmount.sub(tFee);
+//        uint256 tBurn = 0;
+//        if (_totalSupply > _BURN_STOP_SUPPLY) {
+//            tBurn = tokenAmount.div(100);
+//            if (_totalSupply < _BURN_STOP_SUPPLY.add(tBurn)) {
+//                tBurn = _totalSupply.sub(_BURN_STOP_SUPPLY);
+//            }
+//            tTransferAmount = tTransferAmount.sub(tBurn);
+//        }
+        return (cleanedAmount, fee);
     }
 
-    function _getTValues(uint256 tAmount) private view returns (uint256, uint256, uint256) {
-        uint256 tFee = tAmount.div(100);
-        uint256 tTransferAmount = tAmount.sub(tFee);
-        uint256 tBurn = 0;
-        if (_totalSupply > _BURN_STOP_SUPPLY) {
-            tBurn = tAmount.div(100);
-            if (_totalSupply < _BURN_STOP_SUPPLY.add(tBurn)) {
-                tBurn = _totalSupply.sub(_BURN_STOP_SUPPLY);
-            }
-            tTransferAmount = tTransferAmount.sub(tBurn);
-        }
-        return (tTransferAmount, tFee, tBurn);
+    /**
+     * @dev Gets reflected transfer data from a "common" transfer data
+     *
+     * By reflected transfer data we mean multiplied with a rate transfer amount, fee amount,
+     * transfer amount cleaned from fee.
+     */
+    function _getReflectedTransferData(uint256 tokenAmount, uint256 tokenFee)
+        private
+        view
+        returns (uint256, uint256, uint256)
+    {
+        uint256 rate = _getCurrentReflectionRate();
+        uint256 reflectedAmount = tokenAmount.mul(rate);
+        uint256 reflectedFee = tokenFee.mul(rate);
+        uint256 reflectedCleanedAmount = reflectedAmount.sub(reflectedFee);
+//        uint256 rBurn = 0;
+//        if (tBurn > 0) {
+//            rBurn = tBurn.mul(rate);
+//            reflectedCleanedAmount = reflectedCleanedAmount.sub(rBurn);
+//        }
+        return (rAmount, reflectedCleanedAmount, reflectedFee);
     }
 
-    function _getRValues(uint256 tAmount, uint256 tFee, uint256 tBurn) private returns (uint256, uint256, uint256, uint256) {
-        uint256 currentRate = _getRateNV();
-        emit ConsoleLog("got rate", currentRate);
-        uint256 rAmount = tAmount.mul(currentRate);
-        uint256 rFee = tFee.mul(currentRate);
-        uint256 rBurn = 0;
-        uint256 rTransferAmount = rAmount.sub(rFee);
-        if (tBurn > 0) {
-            rBurn = tBurn.mul(currentRate);
-            rTransferAmount = rTransferAmount.sub(rBurn);
-        }
-        return (rAmount, rTransferAmount, rFee, rBurn);
-    }
-
-    function _getRate() private view returns (uint256) {
-        (, uint256 rSupply, uint256 tSupply) = _getCurrentSupply();
+    /**
+     * @dev Gets reflection rate base on current reflect and token supply.
+     *
+     * The rate is used then to get the actual token balance of the account.
+     */
+    function _getCurrentReflectionRate() private view returns (uint256) {
+        (, uint256 rSupply, uint256 tSupply) = _getCurrentSupplyValues();
         return rSupply.div(tSupply);
     }
 
-    function _getRateNV() private returns (uint256) {
-        (string memory a, uint256 rSupply, uint256 tSupply) = _getCurrentSupply();
-        emit ConsoleLog(a, rSupply);
-        emit ConsoleLog(a, tSupply);
-        return rSupply.div(tSupply);
+    /**
+     * @dev Gets reflect and token supply without balances of excluded accounts.
+     *
+     */
+    function _getCurrentSupplyValues() private view returns (uint256, uint256) {
+        uint256 reflectSupply = _reflectTotalSupply;
+        uint256 tokenSupply = _totalSupply;
+        // TODO rid of it
+//        for (uint256 i = 0; i < _excluded.length; i++) {
+//            if (_rOwned[_excluded[i]] > reflectSupply || _tOwned[_excluded[i]] > tokenSupply) return (_reflectTotalSupply, _totalSupply);
+//            reflectSupply = reflectSupply.sub(_rOwned[_excluded[i]]);
+//            tokenSupply = tokenSupply.sub(_tOwned[_excluded[i]]);
+//        }
+        if (reflectSupply < _reflectTotalSupply.div(_totalSupply)) {
+            // TODO why?
+            return (_reflectTotalSupply, _totalSupply);
+        }
+        return (reflectSupply, tokenSupply);
     }
 
-    function _getCurrentSupply() private view returns (string memory, uint256, uint256) {
-        uint256 rSupply = _reflectTotal;
-        uint256 tSupply = _totalSupply;
-        for (uint256 i = 0; i < _excluded.length; i++) {
-            if (_rOwned[_excluded[i]] > rSupply || _tOwned[_excluded[i]] > tSupply) return (_reflectTotal, _totalSupply);
-            rSupply = rSupply.sub(_rOwned[_excluded[i]]);
-            tSupply = tSupply.sub(_tOwned[_excluded[i]]);
-        }
-        if (rSupply < _reflectTotal.div(_totalSupply)) {
-            return ("reached if", _reflectTotal, _totalSupply);
-        } 
-        return ("ok", rSupply, tSupply);
-    }
+//    function reflect(uint256 tAmount) external {
+//        address sender = _msgSender();
+//        require(!_isExcluded[sender], "Excluded addresses cannot call this function");
+//        (uint256 rAmount, , , , , , ) = _getValues(tAmount);
+//        _reflectedBalances[sender] = _reflectedBalances[sender].sub(rAmount);
+//        _reflectTotal = _reflectTotal.sub(rAmount);
+//        _feeTotal = _feeTotal.add(tAmount);
+//    }
 
-    function _burn(address account, uint256 tAmount, uint256 rAmount) private {
-        if (_isExcluded[account]) {
-            _tOwned[account] = _tOwned[account].sub(tAmount, "ERC20: burn amount exceeds balance");
-            _rOwned[account] = _rOwned[account].sub(rAmount, "ERC20: burn amount exceeds balance"); 
-        } else {
-            _rOwned[account] = _rOwned[account].sub(rAmount, "ERC20: burn amount exceeds balance");
-        }
-        _reflectBurn(rAmount, tAmount, account);
-    }
-*/
+//    function _reflectBurn(uint256 rBurn, uint256 tBurn, address account) private {
+//        _reflectTotal = _reflectTotal.sub(rBurn);
+//        _totalSupply = _totalSupply.sub(tBurn);
+//        emit ConsoleLog("burn", tBurn);
+//        emit Transfer(account, address(0), tBurn);
+//    }
+
+//    function burn(uint256 amount) public {
+//        require(_msgSender() != address(0), "ERC20: burn from the zero address");
+//        (uint256 rAmount, , , , , , ) = _getValues(amount);
+//        _burn(_msgSender(), amount, rAmount);
+//    }
+//
+//    function burnFrom(address account, uint256 amount) public {
+//        require(account != address(0), "ERC20: burn from the zero address");
+//        uint256 decreasedAllowance = allowance(account, _msgSender()).sub(amount, "ERC20: burn amount exceeds allowance");
+//        _approve(account, _msgSender(), decreasedAllowance);
+//        (uint256 rAmount, , , , , , ) = _getValues(amount);
+//        _burn(account, amount, rAmount);
+//    }
+//
+//    function _burn(address account, uint256 tAmount, uint256 rAmount) private {
+//        if (_isExcluded[account]) {
+//            _tOwned[account] = _tOwned[account].sub(tAmount, "ERC20: burn amount exceeds balance");
+//            _rOwned[account] = _rOwned[account].sub(rAmount, "ERC20: burn amount exceeds balance");
+//        } else {
+//            _rOwned[account] = _rOwned[account].sub(rAmount, "ERC20: burn amount exceeds balance");
+//        }
+//        _reflectBurn(rAmount, tAmount, account);
+//    }
 }
 
