@@ -6,7 +6,7 @@ import "../node_modules/openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
 import "../node_modules/openzeppelin-solidity/contracts/math/SafeMath.sol";
 //import "../node_modules/openzeppelin-solidity/contracts/utils/Address.sol";
 
-
+// 9:13 - 9:26, 9:28 -
 contract SminemToken is Context, Ownable, IERC20 {
     using SafeMath for uint256;
     //using Address for address;
@@ -29,8 +29,8 @@ contract SminemToken is Context, Ownable, IERC20 {
     string private _symbol = "SNM";
     uint8 private _decimals = 9;
 
-    constructor (address[] memory addresses, uint256[] memory amounts) public {
-
+    constructor(address[] memory addresses, uint256[] memory amounts) public {
+/*
         uint256 rDistributed = 0;
         // loop through the addresses array and send tokens to each address except the last one
         // the corresponding amount to sent is taken from the amounts array
@@ -45,7 +45,7 @@ contract SminemToken is Context, Ownable, IERC20 {
         address liQuidityWalletAddress = addresses[addresses.length - 1];
         _reflectedBalances[liQuidityWalletAddress] = rRemainder;
         emit Transfer(address(0), liQuidityWalletAddress, tokenFromReflection(rRemainder));
-
+*/
     }
 
     function excludeAccount(address account) external onlyOwner() {
@@ -124,7 +124,7 @@ contract SminemToken is Context, Ownable, IERC20 {
     function allowance(address owner, address spender) public view returns (uint256) {
         return _allowances[owner][spender];
     }
-// 9:13 - 9:26, 9:28 -
+
     /**
      * @dev See {IERC20-allowance}.
      *
