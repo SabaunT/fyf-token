@@ -126,7 +126,7 @@ contract SminemToken is Ownable, ERC20Detailed, ERC20Token {
 
         TransferData memory td = _getTransferData(amount);
 
-        // todo copy paste within reflected balance change logic!!
+        // todo copy paste within reflected balance change. Fix after resolving todos in transfer fns.
         if (!_isExcluded[sender] && !_isExcluded[recipient])
             _transferStandard(sender, recipient, td);
         else if (!_isExcluded[sender] && _isExcluded[recipient])
