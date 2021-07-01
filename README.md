@@ -24,11 +24,10 @@ Make sure you have npx package installed globally.
 
 ## Dev notes:
 1. Имей в виду комментарии, которые были даны в Certik + https://pera.finance/info/PeraSmartContractAuditReport.pdf.
-2. Имей в виду багу и ее исправление в части excluded и included аккаунтов. Воспользуйся исправлением, предложенным тут: https://perafinance.medium.com/safemoon-is-it-safe-though-a-detailed-explanation-of-frictionless-yield-bug-338710649846
-3. Посмотри, что делают проекты после деплоя. К примеру, они могут делать renounceOwnership и т.п. вещи делать. Посмотри на etherscan. 
-4. Выбери между комиссией 2% и burn. Есть сомнения по поводу bunr функции: надо проверить, что произойдет при exclude, потому что в этом случае мы можем получить токен саплай ниже, чем количество токенов у людей в маппинге тОунд. Насколько же это опасно? Можем поломать инвариант?
-5. Ответь на оставшиеся вопросы.
+2. Посмотри, что делают проекты после деплоя. К примеру, они могут делать renounceOwnership и т.п. вещи делать. Посмотри на etherscan. 
+3. Выбери между комиссией 2% и burn. Есть сомнения по поводу bunr функции: надо проверить, что произойдет при exclude, потому что в этом случае мы можем получить токен саплай ниже, чем количество токенов у людей в маппинге тОунд. Насколько же это опасно? Можем поломать инвариант?
+4. Ответь на оставшиеся вопросы.
 * what is the aim of the exclude list? Is it to exclude exchanges, because of some bugs with them? It seems I can wipe off the exclude list logic.
 * отличие тотал supply от суммы балансов на 1-2
 * какая математика такая лежит под rTotal...
-8. Change names after getting into deepply into the context of the protocol
+5. Change names after getting into deepply into the context of the protocol
