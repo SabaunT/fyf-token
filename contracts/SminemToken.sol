@@ -24,6 +24,7 @@ contract SminemToken is Ownable, ERC20Detailed, ERC20Token {
     uint256 private _excludedAmount;
     uint256 private _excludedReflectedAmount;
 
+    // TODO try making less decimals for more precision
     constructor(string memory name, string memory symbol, uint8 decimals, uint256 supply)
         ERC20Detailed(name, symbol, decimals)
         public
