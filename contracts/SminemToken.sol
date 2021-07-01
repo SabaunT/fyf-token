@@ -28,8 +28,8 @@ contract SminemToken is Ownable, ERC20Detailed, ERC20Token {
 
     uint256 private constant _feePercent = 1;
 
+    uint256 private _feeDistributedTotal;
     uint256 private _reflectTotalSupply;
-    uint256 private _feeTotal;
     uint256 private _excludedAmount;
     uint256 private _excludedReflectedAmount;
 
@@ -79,7 +79,7 @@ contract SminemToken is Ownable, ERC20Detailed, ERC20Token {
     }
 
     function totalFees() external view returns (uint256) {
-        return _feeTotal;
+        return _feeDistributedTotal;
     }
 
     // TODO not sure if the name states the idea. Test convertActualToReflected(super.balanceOf)
@@ -133,7 +133,7 @@ contract SminemToken is Ownable, ERC20Detailed, ERC20Token {
 
     function _reflectFee(uint256 rFee, uint256 tFee) private {
         _reflectTotalSupply = _reflectTotalSupply.sub(rFee);
-        _feeTotal = _feeTotal.add(tFee);
+        _feeDistributedTotal = _feeDistributedTotal.add(tFee);
     }
 
     /**
