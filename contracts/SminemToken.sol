@@ -125,10 +125,68 @@ contract SminemToken is Ownable, ERC20Detailed, ERC20Token {
         require(amount > 0, "SminemToken::transfer amount must be greater than zero");
 
         TransferData memory td = _getTransferData(amount);
-        _reflectedBalances[sender] = _reflectedBalances[sender].sub(td.reflectedAmount);
-        _reflectedBalances[recipient] = _reflectedBalances[recipient].add(td.reflectedCleanedAmount);
+
+        // todo copy paste within reflected balance change logic!!
+        if (!_isExcluded[sender] && !_isExcluded[recipient])
+            _transferStandard(sender, recipient, td);
+        else if (!_isExcluded[sender] && _isExcluded[recipient])
+            _transferToExcluded(sender, recipient, td);
+        else if (_isExcluded[sender] && !_isExcluded[recipient])
+            _transferFromExcluded(sender, recipient, td);
+        else
+            _transferBothExcluded(sender, recipient, td);
+
         _reflectFee(td.reflectedFee, td.fee);
         emit Transfer(sender, recipient, td.cleanedAmount);
+    }
+
+    function _transferStandard(
+        address sender,
+        address recipient,
+        TransferData memory td
+    )
+        internal
+    {
+        _reflectedBalances[sender] = _reflectedBalances[sender].sub(td.reflectedAmount);
+        _reflectedBalances[recipient] = _reflectedBalances[recipient].add(td.reflectedCleanedAmount);
+    }
+
+    function _transferToExcluded(
+        address sender,
+        address recipient,
+        TransferData memory td
+    )
+        internal
+    {
+        _reflectedBalances[sender] = _reflectedBalances[sender].sub(td.reflectedAmount);
+        _balances[recipient] = _balances[recipient].add(td.cleanedAmount);
+        _reflectedBalances[recipient] = _reflectedBalances[recipient].add(td.reflectedCleanedAmount); // TODO not sure if needed, because of how inclusion is implemented. Check
+
+    }
+
+    function _transferFromExcluded(
+        address sender,
+        address recipient,
+        TransferData memory td
+    )
+        internal
+    {
+        _balances[sender] = _balances[sender].sub(td.amount);
+        _reflectedBalances[sender] = _reflectedBalances[sender].sub(td.reflectedAmount); // TODO not sure if needed, because of how inclusion is implemented. Check
+        _reflectedBalances[recipient] = _reflectedBalances[recipient].add(td.reflectedCleanedAmount);
+    }
+
+    function _transferBothExcluded(
+        address sender,
+        address recipient,
+        TransferData memory td
+    )
+        internal
+    {
+        _balances[sender] = _balances[sender].sub(td.amount);
+        _reflectedBalances[sender] = _reflectedBalances[sender].sub(td.reflectedAmount); // TODO not sure if needed, because of how inclusion is implemented. Check
+        _balances[recipient] = _balances[recipient].add(td.cleanedAmount);
+        _reflectedBalances[recipient] = _reflectedBalances[recipient].add(td.reflectedCleanedAmount); // TODO not sure if needed, because of how inclusion is implemented. Check
     }
 
     function _reflectFee(uint256 rFee, uint256 tFee) private {
