@@ -1,8 +1,10 @@
 pragma solidity 0.5.7;
 
 import "./ERC20.sol";
+import "./ITransferCounter.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "openzeppelin-solidity/contracts/token/ERC20/ERC20Detailed.sol";
+import "openzeppelin-solidity/contracts/drafts/Counters.sol";
 
 /**
  * @dev Implementation of the deflationary mechanism within ERC20 token based on
@@ -12,7 +14,8 @@ import "openzeppelin-solidity/contracts/token/ERC20/ERC20Detailed.sol";
  * fees from transactions made by token holders. This balance isn't stored anywhere, but
  * it's calculated using the reflection rate and reflected balance of an account.
  */
-contract SminemERC20 is Ownable, ERC20Detailed, ERC20Token {
+contract SminemERC20 is Ownable, ERC20Detailed, ERC20Token, IERC20TransferCounter {
+    using Counters for Counters.Counter;
 
     struct TransferData {
         uint256 amount;
@@ -23,15 +26,17 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20Token {
         uint256 reflectedFee;
     }
 
+    uint256 private constant _feePercent = 1;
+
     mapping (address => bool) private _isExcluded;
     mapping(address => uint256) private _reflectedBalances;
-
-    uint256 private constant _feePercent = 1;
 
     uint256 private _feeDistributedTotal;
     uint256 private _reflectTotalSupply;
     uint256 private _excludedAmount;
     uint256 private _excludedReflectedAmount;
+
+    Counters.Counter private _transferCounter;
 
     // TODO try making less decimals for more precision
     constructor(string memory name, string memory symbol, uint8 decimals, uint256 supply)
@@ -72,6 +77,10 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20Token {
         _reflectedBalances[account] = balance.mul(rate); // TODO test without it
         _balances[account] = 0;
         _isExcluded[account] = false;
+    }
+
+    function getNumberOfTransfers() external view returns (uint256) {
+        return _transferCounter.current();
     }
 
     function isExcluded(address account) external view returns (bool) {
@@ -137,6 +146,7 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20Token {
             _transferBothExcluded(sender, recipient, td);
 
         _reflectFee(td.reflectedFee, td.fee);
+        _transferCounter.increment();
         emit Transfer(sender, recipient, td.cleanedAmount);
     }
 
