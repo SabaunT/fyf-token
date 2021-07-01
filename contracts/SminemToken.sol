@@ -14,6 +14,15 @@ import "../node_modules/openzeppelin-solidity/contracts/token/ERC20/ERC20Detaile
  */
 contract SminemToken is Ownable, ERC20Detailed, ERC20Token {
 
+    struct TransferData {
+        uint256 amount;
+        uint256 cleanedAmount;
+        uint256 fee;
+        uint256 reflectedAmount;
+        uint256 reflectedCleanedAmount;
+        uint256 reflectedFee;
+    }
+
     mapping (address => bool) private _isExcluded;
     mapping(address => uint256) private _reflectedBalances;
 
@@ -50,6 +59,21 @@ contract SminemToken is Ownable, ERC20Detailed, ERC20Token {
         _isExcluded[account] = true;
     }
 
+    // todo optimize with balance check like done upper
+    function includeAccount(address account) external onlyOwner {
+        require(_isExcluded[account], "SminemToken::account is not excluded");
+        uint256 rate = _getCurrentReflectionRate();
+        uint256 balance = _balances[account];
+        uint256 reflectedBalance = _reflectedBalances[account];
+
+        _excludedAmount = _excludedAmount.sub(balance);
+        _excludedReflectedAmount = _excludedReflectedAmount.sub(reflectedBalance);
+
+        _reflectedBalances[account] = balance.mul(rate); // TODO test without it
+        _balances[account] = 0;
+        _isExcluded[account] = false;
+    }
+
     function isExcluded(address account) external view returns (bool) {
         return _isExcluded[account];
     }
@@ -59,19 +83,16 @@ contract SminemToken is Ownable, ERC20Detailed, ERC20Token {
     }
 
     // TODO not sure if the name states the idea. Test convertActualToReflected(super.balanceOf)
-    function convertActualToReflected(uint256 tokenAmount, bool deductTransferFee)
+    function convertActualToReflected(uint256 amount, bool deductTransferFee)
         external
         view
         returns (uint256)
     {
-        require(tokenAmount <= _totalSupply, "SminemToken::token amount must be less than supply");
-        if (!deductTransferFee) {
-            (uint256 reflectedAmount, , , , ) = _getTransferData(tokenAmount);
-            return reflectedAmount;
-        } else {
-            ( , uint256 reflectedCleanedAmount, , , ) = _getTransferData(tokenAmount);
-            return reflectedCleanedAmount;
-        }
+        require(amount <= _totalSupply, "SminemToken::token amount must be less than supply");
+        TransferData memory td = _getTransferData(amount);
+        if (deductTransferFee)
+            return td.reflectedCleanedAmount;
+        return td.reflectedAmount;
     }
 
     /**
@@ -102,17 +123,12 @@ contract SminemToken is Ownable, ERC20Detailed, ERC20Token {
         require(sender != address(0), "SminemToken::transfer from the zero address");
         require(recipient != address(0), "SminemToken::transfer to the zero address");
         require(amount > 0, "SminemToken::transfer amount must be greater than zero");
-        (
-            uint256 reflectedAmount,
-            uint256 reflectedCleanedAmount,
-            uint256 reflectedFee,
-            uint256 tokenCleanedAmount,
-            uint256 tokenFee
-        ) = _getTransferData(amount);
-        _reflectedBalances[sender] = _reflectedBalances[sender].sub(reflectedAmount);
-        _reflectedBalances[recipient] = _reflectedBalances[recipient].add(reflectedCleanedAmount);
-        _reflectFee(reflectedFee, tokenFee);
-        emit Transfer(sender, recipient, tokenCleanedAmount);
+
+        TransferData memory td = _getTransferData(amount);
+        _reflectedBalances[sender] = _reflectedBalances[sender].sub(td.reflectedAmount);
+        _reflectedBalances[recipient] = _reflectedBalances[recipient].add(td.reflectedCleanedAmount);
+        _reflectFee(td.reflectedFee, td.fee);
+        emit Transfer(sender, recipient, td.cleanedAmount);
     }
 
     function _reflectFee(uint256 rFee, uint256 tFee) private {
@@ -127,23 +143,21 @@ contract SminemToken is Ownable, ERC20Detailed, ERC20Token {
      * - {SminemToken-_getTokenTransferData};
      * - {SminemToken-_getReflectedTransferData}.
      */
-    function _getTransferData(uint256 tokenAmount)
-        private
-        view
-        returns (
+    function _getTransferData(uint256 amount) private view returns (TransferData memory) {
+        (uint256 tokenCleanedAmount, uint256 tokenFee) = _getCommonTransferData(amount);
+        (
             uint256 reflectedAmount,
             uint256 reflectedCleanedAmount,
-            uint256 reflectedFee,
-            uint256 tokenCleanedAmount,
-            uint256 tokenFee
-        )
-    {
-        (tokenCleanedAmount, tokenFee) = _getTokenTransferData(tokenAmount);
-        (
+            uint256 reflectedFee
+        ) = _getReflectedTransferData(amount, tokenFee);
+        return TransferData(
+            amount,
+            tokenCleanedAmount,
+            tokenFee,
             reflectedAmount,
             reflectedCleanedAmount,
             reflectedFee
-        ) = _getReflectedTransferData(tokenAmount, tokenFee);
+        );
     }
 
     /**
@@ -151,9 +165,9 @@ contract SminemToken is Ownable, ERC20Detailed, ERC20Token {
      *
      * By transfer data we mean fee amount and a transfer amount cleaned from fee.
      */
-    function _getTokenTransferData(uint256 tokenAmount) private pure returns (uint256, uint256) {
-        uint256 fee = tokenAmount.mul(_feePercent).div(100);
-        uint256 cleanedAmount = tokenAmount.sub(fee);
+    function _getCommonTransferData(uint256 amount) private pure returns (uint256, uint256) {
+        uint256 fee = amount.mul(_feePercent).div(100);
+        uint256 cleanedAmount = amount.sub(fee);
         return (cleanedAmount, fee);
     }
 
@@ -163,14 +177,14 @@ contract SminemToken is Ownable, ERC20Detailed, ERC20Token {
      * By reflected transfer data we mean multiplied with a rate transfer amount, fee amount,
      * transfer amount cleaned from fee.
      */
-    function _getReflectedTransferData(uint256 tokenAmount, uint256 tokenFee)
+    function _getReflectedTransferData(uint256 amount, uint256 fee)
         private
         view
         returns (uint256, uint256, uint256)
     {
         uint256 rate = _getCurrentReflectionRate();
-        uint256 reflectedAmount = tokenAmount.mul(rate);
-        uint256 reflectedFee = tokenFee.mul(rate);
+        uint256 reflectedAmount = amount.mul(rate);
+        uint256 reflectedFee = fee.mul(rate);
         uint256 reflectedCleanedAmount = reflectedAmount.sub(reflectedFee);
         return (reflectedAmount, reflectedCleanedAmount, reflectedFee);
     }
@@ -181,8 +195,8 @@ contract SminemToken is Ownable, ERC20Detailed, ERC20Token {
      * The rate is used then to get the actual token balance of the account.
      */
     function _getCurrentReflectionRate() private view returns (uint256) {
-        (uint256 reflectedSupply, uint256 totalSupply) = _getCurrentSupplyValues();
-        return reflectedSupply.div(totalSupply);
+        (uint256 reflectedTotalSupply, uint256 totalSupply) = _getCurrentSupplyValues();
+        return reflectedTotalSupply.div(totalSupply);
     }
 
     /**
@@ -190,20 +204,20 @@ contract SminemToken is Ownable, ERC20Detailed, ERC20Token {
      *
      */
     function _getCurrentSupplyValues() private view returns (uint256, uint256) {
-        uint256 reflectTotalSupply = _reflectTotalSupply;
+        uint256 reflectedTotalSupply = _reflectTotalSupply;
         uint256 totalSupply = _totalSupply;
 
-        if (_excludedAmount > totalSupply || _excludedReflectedAmount > reflectTotalSupply)
-            return (reflectTotalSupply, totalSupply);
+        if (_excludedAmount > totalSupply || _excludedReflectedAmount > reflectedTotalSupply)
+            return (reflectedTotalSupply, totalSupply);
 
-        reflectTotalSupply = reflectTotalSupply.sub(_excludedReflectedAmount);
+        reflectedTotalSupply = reflectedTotalSupply.sub(_excludedReflectedAmount);
         totalSupply = totalSupply.sub(_excludedAmount);
 
-        if (reflectTotalSupply < _reflectTotalSupply.div(_totalSupply)) {
+        if (reflectedTotalSupply < _reflectTotalSupply.div(_totalSupply)) {
             // TODO why?
             return (_reflectTotalSupply, _totalSupply);
         }
-        return (reflectTotalSupply, totalSupply);
+        return (reflectedTotalSupply, totalSupply);
     }
 
 //    function reflect(uint256 tAmount) external {
