@@ -1,8 +1,8 @@
 pragma solidity 0.5.7;
 
 import "./ERC20.sol";
-import "../node_modules/openzeppelin-solidity/contracts/ownership/Ownable.sol";
-import "../node_modules/openzeppelin-solidity/contracts/token/ERC20/ERC20Detailed.sol";
+import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
+import "openzeppelin-solidity/contracts/token/ERC20/ERC20Detailed.sol";
 
 /**
  * @dev Implementation of the deflationary mechanism within ERC20 token based on
@@ -12,7 +12,7 @@ import "../node_modules/openzeppelin-solidity/contracts/token/ERC20/ERC20Detaile
  * fees from transactions made by token holders. This balance isn't stored anywhere, but
  * it's calculated using the reflection rate and reflected balance of an account.
  */
-contract SminemToken is Ownable, ERC20Detailed, ERC20Token {
+contract SminemERC20 is Ownable, ERC20Detailed, ERC20Token {
 
     struct TransferData {
         uint256 amount;

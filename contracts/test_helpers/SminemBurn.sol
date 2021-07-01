@@ -1,10 +1,9 @@
 pragma solidity 0.5.7;
 
-import "../../node_modules/openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
-import "../../node_modules/openzeppelin-solidity/contracts/ownership/Ownable.sol";
-import "../../node_modules/openzeppelin-solidity/contracts/math/SafeMath.sol";
-import "../../node_modules/openzeppelin-solidity/contracts/utils/Address.sol";
-
+import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
+import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
+import "openzeppelin-solidity/contracts/math/SafeMath.sol";
+import "openzeppelin-solidity/contracts/utils/Address.sol";
 
 contract SminemBurn is IERC20, Ownable {
     using SafeMath for uint256;

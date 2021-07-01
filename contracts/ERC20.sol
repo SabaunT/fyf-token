@@ -1,8 +1,8 @@
 pragma solidity 0.5.7;
 
-import "../node_modules/openzeppelin-solidity/contracts/GSN/Context.sol";
-import "../node_modules/openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
-import "../node_modules/openzeppelin-solidity/contracts/math/SafeMath.sol";
+import "openzeppelin-solidity/contracts/GSN/Context.sol";
+import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
+import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 
 /**
  * @dev Implementation of the {IERC20} interface.
