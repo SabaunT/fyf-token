@@ -1,6 +1,6 @@
 pragma solidity 0.5.7;
 
-import "./ERC20Token.sol";
+import "./ERC20.sol";
 import "../node_modules/openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "../node_modules/openzeppelin-solidity/contracts/token/ERC20/ERC20Detailed.sol";
 
