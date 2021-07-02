@@ -38,15 +38,19 @@ contract('SminemToken', async function (accounts) {
     let tokenInst;
 
     before("preparing env", async() => {
+        // empty name
         await expectThrow(
             SminemToken.new("", symbol, decimals, 1, {from: owner})
         );
+        // empty symbol
         await expectThrow(
             SminemToken.new(name, "", decimals, 1, {from: owner})
         );
+        // zero decimal
         await expectThrow(
             SminemToken.new(name, symbol, 0, 1, {from: owner})
         );
+
         tokenInst = await SminemToken.new(
             name,
             symbol,
@@ -59,7 +63,12 @@ contract('SminemToken', async function (accounts) {
     });
 
     it("", async() => {
-
+        /**
+         * Посмотри на скрин, который сделал в пятницу. Он поможет понять глубже
+         * как именно работает токен.
+         *
+         * Завтра потрать время на понимание механизма, а потом разработку тестов для него.
+         */
     })
     /*
 
