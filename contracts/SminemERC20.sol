@@ -14,7 +14,7 @@ import "openzeppelin-solidity/contracts/drafts/Counters.sol";
  * fees from transactions made by token holders. This balance isn't stored anywhere, but
  * it's calculated using the reflection rate and reflected balance of an account.
  */
-contract SminemERC20 is Ownable, ERC20Detailed, ERC20Token, IERC20TransferCounter {
+contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
     using Counters for Counters.Counter;
 
     struct TransferData {
@@ -39,19 +39,26 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20Token, IERC20TransferCounte
     Counters.Counter private _transferCounter;
 
     // TODO try making less decimals for more precision
+    // TODO shall check supply value?
     constructor(string memory name, string memory symbol, uint8 decimals, uint256 supply)
         ERC20Detailed(name, symbol, decimals)
         public
     {
-        uint256 _MAX = ~uint256(0);
+        require(bytes(name).length > 0, "SminemERC20::empty token name string");
+        require(bytes(symbol).length > 0, "SminemERC20::empty token name string");
+        require(decimals != 0, "SminemERC20::decimals can't be zero");
+
         _totalSupply = supply * 10**uint256(decimals);
+        uint256 _MAX = ~uint256(0);
         _reflectTotalSupply = _MAX - (_MAX % _totalSupply);
         _reflectedBalances[_msgSender()] = _reflectTotalSupply;
-        emit Transfer(address(0), _msgSender(), _reflectTotalSupply);
+
+        emit Transfer(address(0), _msgSender(), _totalSupply);
     }
 
     function excludeAccount(address account) external onlyOwner {
         require(!_isExcluded[account], "SminemToken::account is already excluded");
+
         uint256 reflectedBalance = _reflectedBalances[account];
         if (reflectedBalance > 0) {
             uint256 tokenBalance = convertReflectedToActual(reflectedBalance);
@@ -65,8 +72,10 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20Token, IERC20TransferCounte
     }
 
     // todo optimize with balance check like done upper
+    // TODO address(0)
     function includeAccount(address account) external onlyOwner {
         require(_isExcluded[account], "SminemToken::account is not excluded");
+
         uint256 rate = _getCurrentReflectionRate();
         uint256 balance = _balances[account];
         uint256 reflectedBalance = _reflectedBalances[account];
@@ -98,6 +107,7 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20Token, IERC20TransferCounte
         returns (uint256)
     {
         require(amount <= _totalSupply, "SminemToken::token amount must be less than supply");
+
         TransferData memory td = _getTransferData(amount);
         if (deductTransferFee)
             return td.reflectedCleanedAmount;
@@ -109,7 +119,7 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20Token, IERC20TransferCounte
      */
     function balanceOf(address account) public view returns (uint256) {
         if (_isExcluded[account])
-            return ERC20Token.balanceOf(account);
+            return ERC20.balanceOf(account);
         return convertReflectedToActual(_reflectedBalances[account]);
     }
 
@@ -171,7 +181,6 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20Token, IERC20TransferCounte
         _reflectedBalances[sender] = _reflectedBalances[sender].sub(td.reflectedAmount);
         _balances[recipient] = _balances[recipient].add(td.cleanedAmount);
         _reflectedBalances[recipient] = _reflectedBalances[recipient].add(td.reflectedCleanedAmount); // TODO not sure if needed, because of how inclusion is implemented. Check
-
     }
 
     function _transferFromExcluded(

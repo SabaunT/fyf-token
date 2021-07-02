@@ -12,9 +12,9 @@ import "openzeppelin-solidity/contracts/math/SafeMath.sol";
  *
  * This makes it easier to divide deflationary and ERC20 logic. The contract with
  * deflationary logic needs to changes `_balances`, but it can't do it, because
- * private variables can't be accessed in children.
+ * private variables can't be accessed during inheritance.
  */
-contract ERC20Token is Context, IERC20 {
+contract ERC20 is Context, IERC20 {
     using SafeMath for uint256;
 
     mapping (address => uint256) internal _balances;
