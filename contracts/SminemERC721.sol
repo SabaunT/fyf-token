@@ -1,12 +1,14 @@
 pragma solidity 0.5.7;
 
 import "./ITransferCounter.sol";
+import "./Strings.sol";
 import "openzeppelin-solidity/contracts/token/ERC721/ERC721Full.sol";
 import "openzeppelin-solidity/contracts/access/roles/MinterRole.sol";
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 
 contract SminemNFT is ERC721Full, MinterRole {
     using SafeMath for uint256;
+    using Strings for uint256;
 
     IERC20TransferCounter private _token;
 
@@ -33,24 +35,27 @@ contract SminemNFT is ERC721Full, MinterRole {
         _baseUri = baseUri;
     }
 
-    // TODO safe new token URIs and return ids of newly minted tokens
     function mint(address[] calldata to) external onlyMinter returns (uint256[] memory) {
-        require(to.length <= 255, "SminemNFT::too long recipient list");
-        uint256 possibleMints = _getPossibleMints();
-        require(to.length > possibleMints, "SminemNFT::excessive amount of token recipients");
+        require(to.length <= 255, "SminemNFT::can't mint more than 255 tokens at once");
+        require(to.length <= _getPossibleMints(), "SminemNFT::excessive amount of token recipients");
 
-        uint256[] memory mintedTokens;
+        uint256[] memory mintedTokens = new uint256[](to.length);
         string memory baseUri = _baseUri;
         for (uint8 i = 0; i < to.length; i++) {
             uint256 newTokenId = totalSupply();
-//            string memory newTokenUri = string(abi.encodePacked(baseURI, tokenId.toString())
+            string memory newTokenUri = string(abi.encodePacked(baseUri, newTokenId.toString()));
             _safeMint(to[i], newTokenId);
-//            _setTokenURI(newTokenId, newTokenUri);
+            _setTokenURI(newTokenId, newTokenUri);
+            mintedTokens[i] = newTokenId;
         }
         return mintedTokens;
     }
 
-    function _getPossibleMints() private returns (uint256) {
+    function getMultiplicityForTokenMint() external view returns (uint256) {
+        return _multiplicityOfTokenTransfers;
+    }
+
+    function _getPossibleMints() private view returns (uint256) {
         uint256 maxMints = _token.getNumberOfTransfers().div(_multiplicityOfTokenTransfers);
         uint256 actualMints = totalSupply();
         return maxMints.sub(actualMints);
