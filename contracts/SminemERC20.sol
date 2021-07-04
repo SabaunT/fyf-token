@@ -38,7 +38,6 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
 
     Counters.Counter private _transferCounter;
 
-    // TODO try making less decimals for more precision
     // TODO shall check supply value?
     constructor(string memory name, string memory symbol, uint8 decimals, uint256 supply)
         ERC20Detailed(name, symbol, decimals)
@@ -72,7 +71,6 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
     }
 
     // todo optimize with balance check like done upper
-    // TODO address(0)
     function includeAccount(address account) external onlyOwner {
         require(_isExcluded[account], "SminemToken::account is not excluded");
 
@@ -83,7 +81,7 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         _excludedAmount = _excludedAmount.sub(balance);
         _excludedReflectedAmount = _excludedReflectedAmount.sub(reflectedBalance);
 
-        _reflectedBalances[account] = balance.mul(rate); // TODO test without it
+        _reflectedBalances[account] = balance.mul(rate);
         _balances[account] = 0;
         _isExcluded[account] = false;
     }
@@ -145,6 +143,7 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
 
         TransferData memory td = _getTransferData(amount);
 
+        // todo exclusion global vars change!!
         // todo copy paste within reflected balance change. Fix after resolving todos in transfer fns.
         if (!_isExcluded[sender] && !_isExcluded[recipient])
             _transferStandard(sender, recipient, td);
@@ -297,6 +296,7 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         return (reflectedTotalSupply, totalSupply);
     }
 
+    // TODO check if this is ever called on etherscan
 //    function reflect(uint256 tAmount) external {
 //        address sender = _msgSender();
 //        require(!_isExcluded[sender], "Excluded addresses cannot call this function");

@@ -2,6 +2,39 @@ const { ether, BN } = require('openzeppelin-test-helpers');
 
 const SminemToken = artifacts.require('SminemERC20');
 
+/**
+ * Tests for:
+ * 1. balanceOf(excluded and included accounts)
+ * 2. Exclusion and inclusion + transfers
+ * Самое главное, чтобы при вкл./выкл. адреса, дальнейших трансферах (их отсутствия),
+ * балансы всех остальных не поменялись. Распиши явный пример на листочке. Более подробно, читай ниже.
+ *
+ * Выключение адреса лишает его участия в образовании rate (и получении комиссий в момент перехода из gons во fragments),
+ * однако не лишает возможности отправлять и получать средства. Чтобы не хранить и не рассчитывать rate, по которому
+ * из gons можно будет получить fragments без комиссии для каждого исключенного, мы просто для них теперь используем
+ * стандартный mapping balances, а также соотв способ расчета их баланса (просто обращаемся к тому mapping).
+ * Поэтому проверь, каков rate между текущим балансом gons, а также текущим rate в системе (и тем rate, когда он был исключен).
+ * Здесь же нужно, чтобы при включении адреса мы получили следующий эффект: rate не изменился, у всех адресов те же балансы и
+ * включенный адрес не получил на свой fragments баланс больше токенов (они вообще не изменились). -> 2.3.2.
+ * 
+ *   2.1. If can be excluded/included
+ *   2.2. If exclusion maths (excluded amounts from supply) is correct:
+ *     2.2.1. Address 0
+ *     2.2.2. When excluded over, less than the supply
+ *     2.2.3. if excluded address has 0 balance
+ *   2.3. If inclusion maths is correct:
+ *     2.3.1. Address 0
+ *     2.3.2. Safe against bug, showed in the safemoon (check it on both reflect and sminem)
+ *     2.3.3. Zero balance
+ *     2.3.4. Test without newly setting reflectedBalance to balance*rate (2.3.2)
+ * 3. convertActualToReflected - not sure if the name states the idea. Test convertActualToReflected(super.balanceOf)
+ * 4. Transfers without an exclusion - guarantee, that fees are going to be distributed
+ *   4.1. sending yourself
+ *   4.2. sending between 3-4 addresses.
+ * 5. reflectTotalSupply lower bound
+ * 5. reflectSupply < rate? getSupply values fn
+ */
+
 contract('SminemToken', async function (accounts) {
     // constructor params
     const name = "SminemERC20";
