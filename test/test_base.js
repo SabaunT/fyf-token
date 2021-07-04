@@ -32,7 +32,8 @@ const SminemERC20 = artifacts.require('SminemERC20');
  *   4.1. sending yourself
  *   4.2. sending between 3-4 addresses.
  * 5. reflectTotalSupply lower bound
- * 5. reflectSupply < rate? getSupply values fn
+ * 6. reflectSupply < rate? getSupply values fn
+ * 7. Some ERC20 behaviour: approve, transferFrom and e.t.c.
  */
 
 contract('SminemToken', async function (accounts) {
