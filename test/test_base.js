@@ -1,6 +1,6 @@
 const { ether, BN } = require('openzeppelin-test-helpers');
 
-const SminemToken = artifacts.require('SminemERC20');
+const SminemERC20 = artifacts.require('SminemERC20');
 
 /**
  * Tests for:
@@ -16,7 +16,7 @@ const SminemToken = artifacts.require('SminemERC20');
  * Поэтому проверь, каков rate между текущим балансом gons, а также текущим rate в системе (и тем rate, когда он был исключен).
  * Здесь же нужно, чтобы при включении адреса мы получили следующий эффект: rate не изменился, у всех адресов те же балансы и
  * включенный адрес не получил на свой fragments баланс больше токенов (они вообще не изменились). -> 2.3.2.
- * 
+ *
  *   2.1. If can be excluded/included
  *   2.2. If exclusion maths (excluded amounts from supply) is correct:
  *     2.2.1. Address 0
@@ -73,18 +73,18 @@ contract('SminemToken', async function (accounts) {
     before("preparing env", async() => {
         // empty name
         await expectThrow(
-            SminemToken.new("", symbol, decimals, 1, {from: owner})
+            SminemERC20.new("", symbol, decimals, 1, {from: owner})
         );
         // empty symbol
         await expectThrow(
-            SminemToken.new(name, "", decimals, 1, {from: owner})
+            SminemERC20.new(name, "", decimals, 1, {from: owner})
         );
         // zero decimal
         await expectThrow(
-            SminemToken.new(name, symbol, 0, 1, {from: owner})
+            SminemERC20.new(name, symbol, 0, 1, {from: owner})
         );
 
-        tokenInst = await SminemToken.new(
+        tokenInst = await SminemERC20.new(
             name,
             symbol,
             decimals,
