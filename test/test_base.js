@@ -31,7 +31,7 @@ const SminemERC20 = artifacts.require('SminemERC20');
  * 4. Transfers without an exclusion - guarantee, that fees are going to be distributed
  *   4.1. sending yourself
  *   4.2. sending between 3-4 addresses.
- * 5. reflectTotalSupply lower bound
+ * 5. reflectTotalSupply lower bound (https://github.com/reflectfinance/reflect-contracts/issues/10). Seems that mechanics should be off after some time.
  * 6. reflectSupply < rate? getSupply values fn
  * 7. Some ERC20 behaviour: approve, transferFrom and e.t.c.
  */
