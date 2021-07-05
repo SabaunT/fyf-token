@@ -33,7 +33,7 @@ Make sure you have npx package installed globally.
 * отличие тотал supply от суммы балансов на 1-2
 * какая математика такая лежит под rTotal...
 5. Change names after getting into deepply into the context of the protocol
-6. Есть бага, которая связана с границами rTotal. Из-за того, что rTotal постоянно уменьшается
+6. reflectTotalSupply lower bound (https://github.com/reflectfinance/reflect-contracts/issues/10). Seems that mechanics should be off after some time. Есть бага, которая связана с границами rTotal. Из-за того, что rTotal постоянно уменьшается
 мы можем прийти к ситуации, когда начисления комиссий поломаются. В этом случае, при достижении
 определенного threshold необходимо осуществить занового инициализацию контракта так.
 6.1. Когда контракт создан, у нас имеется множество балансов balances, которые имеют свои соответствующие

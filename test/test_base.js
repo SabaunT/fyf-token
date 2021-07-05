@@ -31,9 +31,7 @@ const SminemERC20 = artifacts.require('SminemERC20');
  * 4. Transfers without an exclusion - guarantee, that fees are going to be distributed
  *   4.1. sending yourself
  *   4.2. sending between 3-4 addresses.
- * 5. reflectTotalSupply lower bound (https://github.com/reflectfinance/reflect-contracts/issues/10). Seems that mechanics should be off after some time.
- * 6. reflectSupply < rate? getSupply values fn
- * 7. Some ERC20 behaviour: approve, transferFrom and e.t.c.
+ * 5. reflectSupply < rate? getSupply values fn
  */
 
 contract('SminemToken', async function (accounts) {
@@ -43,7 +41,7 @@ contract('SminemToken', async function (accounts) {
     const decimals = 9;
 
     const toBNWithDecimals = (v) => new BN(v * Math.pow(10, decimals))
-    const toBNWithoutDecimals = (v) => new BN(Math.floor(v / Math.pow(10, decimals)))
+    const fromBNWithDecimals = (bn) => Math.floor(bn.toNumber() / Math.pow(10, decimals))
 
     const totalSupply = toBNWithDecimals(100000);
 
@@ -62,6 +60,49 @@ contract('SminemToken', async function (accounts) {
         }
         assert.fail('Expected throw not received');
     };
+
+    // new balance = old balance + fee * (old balance / total supply)
+    let getExpectedBalancesAfterTransfer = async (sender, receiver, transferringAmount) => {
+        let feeAmount = transferringAmount.div(new BN(100));
+        let receivingAmount = transferringAmount.sub(feeAmount);
+
+        let senderBalance = await tokenInst.balanceOf(sender);
+        let senderBalanceAfterTransfer = senderBalance.sub(transferringAmount);
+        let senderBalanceWithDistributedFees = {
+            classical: classicalFeeDistribution(senderBalanceAfterTransfer, feeAmount),
+            new: newFeeDistribution(senderBalanceAfterTransfer, feeAmount),
+        };
+
+        let receiverBalance = await tokenInst.balanceOf(receiver);
+        let receiverBalanceAfterTransfer = receiverBalance.add(receivingAmount);
+        let receiverBalanceWithDistributedFees = {
+            classical: classicalFeeDistribution(receiverBalanceAfterTransfer, feeAmount),
+            new: newFeeDistribution(receiverBalanceAfterTransfer, feeAmount)
+        };
+
+        return {
+            sender: senderBalanceWithDistributedFees,
+            receiver: receiverBalanceWithDistributedFees,
+        };
+    }
+
+    let classicalFeeDistribution = (balance, fee) => {
+        return fromBNWithDecimals(balance.add((balance.mul(fee)).div(totalSupply)));
+    }
+
+    let newFeeDistribution = (balance, fee) => {
+        // https://perafinance.medium.com/safemoon-is-it-safe-though-a-detailed-explanation-of-frictionless-yield-bug-338710649846
+        return (balance.mul(totalSupply)).div(totalSupply.sub(fee));
+    }
+
+    let assertBalancesAfterTransfer = (expected, actual) => {
+        let actualNoDecimals = fromBNWithDecimals(actual);
+        assert.ok(
+            // due of decimals and rounding stuff
+            actual.sub(expected.new).lte(new BN(1)) ||
+            expected.classical === actualNoDecimals
+        )
+    }
 
     // env params
     const account1 = accounts[0];
@@ -89,21 +130,94 @@ contract('SminemToken', async function (accounts) {
             name,
             symbol,
             decimals,
-            toBNWithoutDecimals(totalSupply),
+            fromBNWithDecimals(totalSupply),
             {from: owner}
         );
         let ownerBalance = await tokenInst.balanceOf(owner);
         assert.equal(ownerBalance.toString(), totalSupply.toString());
     });
 
-    it("", async() => {
-        /**
-         * Посмотри на скрин, который сделал в пятницу. Он поможет понять глубже
-         * как именно работает токен.
-         *
-         * Завтра потрать время на понимание механизма, а потом разработку тестов для него.
-         */
+    it("ERC20 behaviour: approving from owner to account 1 and 2", async() => {
+        let approvedAcc1 = toBNWithDecimals(1000000);
+        let approvedAcc2 = toBNWithDecimals(5000);
+        await tokenInst.approve(account1, approvedAcc1, {from: owner});
+        await tokenInst.approve(account2, approvedAcc2, {from: owner});
+
+        let allowanceAcc1 = await tokenInst.allowance(owner, account1);
+        let allowanceAcc2 = await tokenInst.allowance(owner, account2);
+
+        assert.equal(approvedAcc1.toString(), allowanceAcc1.toString());
+        assert.equal(approvedAcc2.toString(), allowanceAcc2.toString());
     })
+
+    it("ERC20 behaviour: failing transfer from owner of account 1", async() => {
+        // Because 1'000'000 was approved, which is more than owner have
+        let allowanceAcc1 = await tokenInst.allowance(owner, account1);
+        // Because 1'000'000 was approved, which is more than owner have
+        await expectThrow(
+            tokenInst.transferFrom(owner, account1, allowanceAcc1, {from: account1})
+        );
+    });
+
+    it("ERC20 behaviour: decreasing allowance to account 1 from owner", async() => {
+        let expectedAllowance = toBNWithDecimals(5000);
+        let subAmount = toBNWithDecimals(995000);
+
+        await tokenInst.decreaseAllowance(account1, subAmount, {from: owner});
+
+        let allowanceAcc2 = await tokenInst.allowance(owner, account2);
+
+        assert.equal(expectedAllowance.toString(), allowanceAcc2.toString());
+    });
+
+    it("Transferring from owner for account 1", async() => {
+        let transferringAmount = toBNWithDecimals(5000);
+        let expectedBalances = await getExpectedBalancesAfterTransfer(owner, account1, transferringAmount);
+
+        await tokenInst.transferFrom(owner, account1, transferringAmount, {from: account1});
+
+        let ownerBalanceAfterTransfer = await tokenInst.balanceOf(owner);
+        let acc1BalanceAfterTransfer = await tokenInst.balanceOf(account1);
+
+        assertBalancesAfterTransfer(expectedBalances.sender, ownerBalanceAfterTransfer);
+        assertBalancesAfterTransfer(expectedBalances.receiver, acc1BalanceAfterTransfer)
+    })
+
+    it("Transferring from owner for account 2", async() => {
+        let transferringAmount = toBNWithDecimals(5000);
+        let expectedBalances = await getExpectedBalancesAfterTransfer(owner, account2, transferringAmount);
+
+        // Check others balances
+        // todo dirty
+        let balanceAcc1Before = await tokenInst.balanceOf(account1);
+        let expectedAcc1 = newFeeDistribution(balanceAcc1Before, transferringAmount.div(new BN(100)));
+
+        await tokenInst.transferFrom(owner, account2, transferringAmount, {from: account2});
+
+        let ownerBalanceAfterTransfer = await tokenInst.balanceOf(owner);
+        let acc2BalanceAfterTransfer = await tokenInst.balanceOf(account2);
+
+        let balanceAcc1After = await tokenInst.balanceOf(account1);
+
+        assertBalancesAfterTransfer(expectedBalances.sender, ownerBalanceAfterTransfer);
+        assertBalancesAfterTransfer(expectedBalances.receiver, acc2BalanceAfterTransfer);
+        assert.equal(expectedAcc1.toString(), balanceAcc1After.toString());
+    });
+
+    it("ERC20 behaviour: zero allowances", async() => {
+        let allowanceAcc1 = await tokenInst.allowance(owner, account1);
+        let allowanceAcc2 = await tokenInst.allowance(owner, account2);
+
+        assert.ok(allowanceAcc1.eq(new BN(0)));
+        assert.ok(allowanceAcc2.eq(new BN(0)));
+    })
+
+    // Заверши блок под цифрой 4:
+    // вышли еще 3 адресу побольше и посчитай руками все
+    // попробуй выслать себе и посчитай руками
+
+    // Заверши блок под цифрой 1 еще одним describe внутри contract
+
     /*
 
     it('should transfer tokens correctly between three accounts', async function() {
