@@ -99,8 +99,15 @@ contract('SminemToken', async function (accounts) {
         let actualNoDecimals = fromBNWithDecimals(actual);
         assert.ok(
             // due of decimals and rounding stuff
-            actual.sub(expected.new).lte(new BN(1)) ||
+            (actual.sub(expected.new).lte(new BN(1)) && actual.sub(expected.new).gte(new BN(-1))) ||
             expected.classical === actualNoDecimals
+        )
+    }
+
+    let assertBalanceFeeDistribution = (expected, actual) => {
+        assert.ok(
+            // due of decimals and rounding stuff
+            actual.sub(expected).lte(new BN(1)) && actual.sub(expected).gte(new BN(-1))
         )
     }
 
@@ -212,9 +219,62 @@ contract('SminemToken', async function (accounts) {
         assert.ok(allowanceAcc2.eq(new BN(0)));
     })
 
-    // Заверши блок под цифрой 4:
-    // вышли еще 3 адресу побольше и посчитай руками все
-    // попробуй выслать себе и посчитай руками
+    // todo test fail transfer from
+
+    it("Transferring from account 1 to account 3", async() => {
+        // todo test failing transfer because of exceeds balance
+        let transferringAmount = toBNWithDecimals(2000);
+        let expectedBalances = await getExpectedBalancesAfterTransfer(account1, account3, transferringAmount);
+
+        // check other balances for token distribution
+        // todo dirty
+        let balanceAcc2Before = await tokenInst.balanceOf(account2);
+        let expectedAcc2 = newFeeDistribution(balanceAcc2Before, transferringAmount.div(new BN(100)));
+        let balanceOwnerBefore = await tokenInst.balanceOf(owner);
+        let expectedOwner = newFeeDistribution(balanceOwnerBefore, transferringAmount.div(new BN(100)));
+
+        await tokenInst.transfer(account3, transferringAmount, {from: account1});
+
+        let acc1BalanceAfterTransfer = await tokenInst.balanceOf(account1);
+        let acc3BalanceAfterTransfer = await tokenInst.balanceOf(account3);
+
+        let balanceAcc2After = await tokenInst.balanceOf(account2);
+        let balanceOwnerAfter = await tokenInst.balanceOf(owner);
+
+        assertBalancesAfterTransfer(expectedBalances.sender, acc1BalanceAfterTransfer);
+        assertBalancesAfterTransfer(expectedBalances.receiver, acc3BalanceAfterTransfer);
+        assert.equal(expectedAcc2.toString(), balanceAcc2After.toString());
+        assert.equal(expectedOwner.toString(), balanceOwnerAfter.toString());
+    });
+
+    it("Transferring to yourself", async() => {
+        // the same as just splitting fee between token holders
+        let transferringAmount = toBNWithDecimals(10000);
+        let fee = transferringAmount.div(new BN(100));
+        // let expectedBalances = await getExpectedBalancesAfterTransfer(owner, owner, transferringAmount)
+
+        let balanceBeforeAcc1 = await tokenInst.balanceOf(account1);
+        let balanceBeforeAcc2 = await tokenInst.balanceOf(account2);
+        let balanceBeforeAcc3 = await tokenInst.balanceOf(account3);
+        let balanceBeforeOwner = await tokenInst.balanceOf(owner);
+        let balanceOwnerBeforeDistribution = balanceBeforeOwner.sub(transferringAmount).add(transferringAmount.sub(fee))
+        let expectedAcc1 = newFeeDistribution(balanceBeforeAcc1, fee);
+        let expectedAcc2 = newFeeDistribution(balanceBeforeAcc2, fee);
+        let expectedAcc3 = newFeeDistribution(balanceBeforeAcc3, fee);
+        let expectedOwner = newFeeDistribution(balanceOwnerBeforeDistribution, fee);
+
+        await tokenInst.transfer(owner, transferringAmount, {from: owner});
+
+        let balanceAfterAcc1 = await tokenInst.balanceOf(account1);
+        let balanceAfterAcc2 = await tokenInst.balanceOf(account2);
+        let balanceAfterAcc3 = await tokenInst.balanceOf(account3);
+        let balanceAfterOwner = await tokenInst.balanceOf(owner);
+        
+        assertBalanceFeeDistribution(expectedAcc1, balanceAfterAcc1);
+        assertBalanceFeeDistribution(expectedAcc2, balanceAfterAcc2);
+        assertBalanceFeeDistribution(expectedAcc3, balanceAfterAcc3);
+        assertBalanceFeeDistribution(expectedOwner, balanceAfterOwner);
+    })
 
     // Заверши блок под цифрой 1 еще одним describe внутри contract
 
