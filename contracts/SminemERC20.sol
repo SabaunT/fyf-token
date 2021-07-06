@@ -77,12 +77,13 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
 
         uint256 rate = _getCurrentReflectionRate();
         uint256 balance = _balances[account];
-        uint256 reflectedBalance = _reflectedBalances[account];
+        uint256 newReflectedBalance = balance.mul(rate);
 
         _excludedAmount = _excludedAmount.sub(balance);
-        _excludedReflectedAmount = _excludedReflectedAmount.sub(reflectedBalance);
+        // todo check for no errors in subtraction
+        _excludedReflectedAmount = _excludedReflectedAmount.sub(newReflectedBalance);
 
-        _reflectedBalances[account] = balance.mul(rate);
+        _reflectedBalances[account] = newReflectedBalance;
         _balances[account] = 0;
         _isExcluded[account] = false;
     }

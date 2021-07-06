@@ -17,13 +17,10 @@ const SminemERC20 = artifacts.require('SminemERC20');
  * Здесь же нужно, чтобы при включении адреса мы получили следующий эффект: rate не изменился, у всех адресов те же балансы и
  * включенный адрес не получил на свой fragments баланс больше токенов (они вообще не изменились). -> 2.3.2.
  *
- *   2.1. If can be excluded/included
  *   2.2. If exclusion maths (excluded amounts from supply) is correct:
- *     2.2.1. Address 0
  *     2.2.2. When excluded over, less than the supply
  *     2.2.3. if excluded address has 0 balance
  *   2.3. If inclusion maths is correct:
- *     2.3.1. Address 0
  *     2.3.2. Safe against bug, showed in the safemoon (check it on both reflect and sminem)
  *     2.3.3. Zero balance
  *     2.3.4. Test without newly setting reflectedBalance to balance*rate (2.3.2)
@@ -217,9 +214,9 @@ contract('SminemToken', async function (accounts) {
     })
 
     // todo test fail transfer from
+    // todo test failing transfer because of exceeds balance
 
     it("Transferring from account 1 to account 3", async() => {
-        // todo test failing transfer because of exceeds balance
         let transferringAmount = toBNWithDecimals(2000);
         let expectedBalances = await getExpectedBalancesAfterTransfer(account1, account3, transferringAmount);
 
@@ -276,6 +273,41 @@ contract('SminemToken', async function (accounts) {
     describe("Inclusion and exclusion logic tests", async() => {
 
         const zeroAddress = "0x0000000000000000000000000000000000000000";
+        let excludedAmount = new BN(0);
+
+        // todo copy paste...
+        let getExpectedBalancesAfterTransferWithExclusion = async (sender, receiver, transferringAmount) => {
+            let feeAmount = transferringAmount.div(new BN(100));
+            let receivingAmount = transferringAmount.sub(feeAmount);
+
+            let senderBalance = await tokenInst.balanceOf(sender);
+            let senderBalanceAfterTransfer = senderBalance.sub(transferringAmount);
+            let senderBalanceWithDistributedFees = {
+                classical: classicalFeeDistributionWithExclusion(senderBalanceAfterTransfer, feeAmount),
+                new: newFeeDistributionWithExclusion(senderBalanceAfterTransfer, feeAmount),
+            };
+
+            let receiverBalance = await tokenInst.balanceOf(receiver);
+            let receiverBalanceAfterTransfer = receiverBalance.add(receivingAmount);
+            let receiverBalanceWithDistributedFees = {
+                classical: classicalFeeDistributionWithExclusion(receiverBalanceAfterTransfer, feeAmount),
+                new: newFeeDistributionWithExclusion(receiverBalanceAfterTransfer, feeAmount)
+            };
+
+            return {
+                sender: senderBalanceWithDistributedFees,
+                receiver: receiverBalanceWithDistributedFees,
+            };
+        }
+
+        let classicalFeeDistributionWithExclusion = (balance, fee) => {
+            return fromBNWithDecimals(balance.add((balance.mul(fee)).div(totalSupply.sub(excludedAmount))));
+        }
+
+        let newFeeDistributionWithExclusion = (balance, fee) => {
+            // https://perafinance.medium.com/safemoon-is-it-safe-though-a-detailed-explanation-of-frictionless-yield-bug-338710649846
+            return (balance.mul(totalSupply.sub(excludedAmount))).div((totalSupply.sub(excludedAmount)).sub(fee));
+        }
 
         it("Exclusion fail", async() => {
             // Invalid access
@@ -309,9 +341,93 @@ contract('SminemToken', async function (accounts) {
                 tokenInst.includeAccount(account1, {from: owner})
             )
         })
+
+        it("Exclusion don't change balance", async() => {
+            let balanceBefore = await tokenInst.balanceOf(account1);
+            await tokenInst.excludeAccount(account1, {from: owner});
+            let balanceAfter = await tokenInst.balanceOf(account1);
+
+            excludedAmount = excludedAmount.add(balanceBefore);
+
+            assert.equal(balanceBefore.toString(), balanceAfter.toString());
+        })
+
+        it("Transfers between included (owner->account3) don't change balance of excluded", async() => {
+            let transferringAmount = toBNWithDecimals(10000);
+            let fee = transferringAmount.div(new BN(100));
+            let expectedBalances = await getExpectedBalancesAfterTransferWithExclusion(owner, account3, transferringAmount);
+
+            let balanceExcludedBefore = await tokenInst.balanceOf(account1);
+            let balanceBeforeAcc2 = await tokenInst.balanceOf(account2);
+            let expectedAcc2 = newFeeDistributionWithExclusion(balanceBeforeAcc2, fee);
+
+            await tokenInst.transfer(account3, transferringAmount, {from: owner});
+
+            let balanceExcludedAfter = await tokenInst.balanceOf(account1);
+            let balanceAfterAcc2 = await tokenInst.balanceOf(account2);
+            let balanceAfterAcc3 = await tokenInst.balanceOf(account3);
+            let balanceAfterOwner = await tokenInst.balanceOf(owner);
+
+            // todo wipe off
+            // console.log(balanceBeforeAcc2.toString())
+            // console.log("\nAFTER\n")
+            // console.log(balanceExcludedAfter.toString());
+            // console.log(balanceAfterAcc2.toString())
+            // console.log(balanceAfterAcc3.toString())
+            // console.log(balanceAfterOwner.toString())
+
+            assert.equal(balanceExcludedBefore.toString(), balanceExcludedAfter.toString());
+            assertBalancesAfterTransfer(expectedBalances.sender, balanceAfterOwner);
+            assertBalancesAfterTransfer(expectedBalances.receiver, balanceAfterAcc3);
+            assertBalanceFeeDistribution(expectedAcc2, balanceAfterAcc2);
+        })
+
+        it("Transfer between included (owner->account2) don't change balance of excluded", async() => {
+            let transferringAmount = toBNWithDecimals(10000);
+            let balanceExcludedBefore = await tokenInst.balanceOf(account1);
+
+            await tokenInst.transfer(account2, transferringAmount, {from: owner});
+
+            let balanceExcludedAfter = await tokenInst.balanceOf(account1);
+
+            // todo wipe off
+            // let balanceAfterAcc2 = await tokenInst.balanceOf(account2);
+            // let balanceAfterAcc3 = await tokenInst.balanceOf(account3);
+            // let balanceAfterOwner = await tokenInst.balanceOf(owner);
+            // console.log(balanceExcludedAfter.toString());
+            // console.log(balanceAfterAcc2.toString())
+            // console.log(balanceAfterAcc3.toString())
+            // console.log(balanceAfterOwner.toString())
+
+            assert.equal(balanceExcludedBefore.toString(), balanceExcludedAfter.toString());
+        })
+
+        it("Inclusion doesn't change balances: safe against inclusion bug", async() => {
+            //https://perafinance.medium.com/safemoon-is-it-safe-though-a-detailed-explanation-of-frictionless-yield-bug-338710649846
+
+            let balanceBeforeAcc1 = await tokenInst.balanceOf(account1);
+            let balanceBeforeAcc2 = await tokenInst.balanceOf(account2);
+            let balanceBeforeAcc3 = await tokenInst.balanceOf(account3);
+            let balanceBeforeOwner = await tokenInst.balanceOf(owner);
+
+            await tokenInst.includeAccount(account1, {from: owner});
+
+            let balanceAfterAcc1 = await tokenInst.balanceOf(account1);
+            let balanceAfterAcc2 = await tokenInst.balanceOf(account2);
+            let balanceAfterAcc3 = await tokenInst.balanceOf(account3);
+            let balanceAfterOwner = await tokenInst.balanceOf(owner);
+
+            assert.equal(balanceBeforeAcc1.toString(), balanceAfterAcc1.toString());
+            assert.equal(balanceBeforeAcc2.toString(), balanceAfterAcc2.toString());
+            assert.equal(balanceBeforeAcc3.toString(), balanceAfterAcc3.toString());
+            assert.equal(balanceBeforeOwner.toString(), balanceAfterOwner.toString());
+        })
     })
 
-    // Заверши блок под цифрой 1 еще одним describe внутри contract
+    // todo продолжи тесты:
+    // исследуй, почему тесты в 2.3.4. проходят для всех кроме первого баланса.
+    // - сделай еще один трансфер - проверь распределение комиссий
+    // - сделай трансферы между выкл, от выкл и к выкл.
 
     /*
 
