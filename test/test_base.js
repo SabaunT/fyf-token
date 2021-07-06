@@ -28,9 +28,6 @@ const SminemERC20 = artifacts.require('SminemERC20');
  *     2.3.3. Zero balance
  *     2.3.4. Test without newly setting reflectedBalance to balance*rate (2.3.2)
  * 3. convertActualToReflected - not sure if the name states the idea. Test convertActualToReflected(super.balanceOf)
- * 4. Transfers without an exclusion - guarantee, that fees are going to be distributed
- *   4.1. sending yourself
- *   4.2. sending between 3-4 addresses.
  * 5. reflectSupply < rate? getSupply values fn
  */
 
@@ -269,11 +266,49 @@ contract('SminemToken', async function (accounts) {
         let balanceAfterAcc2 = await tokenInst.balanceOf(account2);
         let balanceAfterAcc3 = await tokenInst.balanceOf(account3);
         let balanceAfterOwner = await tokenInst.balanceOf(owner);
-        
+
         assertBalanceFeeDistribution(expectedAcc1, balanceAfterAcc1);
         assertBalanceFeeDistribution(expectedAcc2, balanceAfterAcc2);
         assertBalanceFeeDistribution(expectedAcc3, balanceAfterAcc3);
         assertBalanceFeeDistribution(expectedOwner, balanceAfterOwner);
+    })
+
+    describe("Inclusion and exclusion logic tests", async() => {
+
+        const zeroAddress = "0x0000000000000000000000000000000000000000";
+
+        it("Exclusion fail", async() => {
+            // Invalid access
+            await expectThrow(
+                tokenInst.excludeAccount(account1, {from: account2})
+            )
+            // zero address
+            await expectThrow(
+                tokenInst.excludeAccount(zeroAddress, {from: owner})
+            )
+
+            // already excluded
+            await tokenInst.excludeAccount(account1, {from: owner});
+            await expectThrow(
+                tokenInst.excludeAccount(account1, {from: owner})
+            )
+        })
+
+        it("Inclusion fail", async() => {
+            // Invalid access
+            await expectThrow(
+                tokenInst.includeAccount(account1, {from: account2})
+            )
+            // not excluded account
+            await expectThrow(
+                tokenInst.includeAccount(account3, {from: owner})
+            )
+            // already included
+            await tokenInst.includeAccount(account1, {from: owner});
+            await expectThrow(
+                tokenInst.includeAccount(account1, {from: owner})
+            )
+        })
     })
 
     // Заверши блок под цифрой 1 еще одним describe внутри contract

@@ -56,7 +56,8 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
     }
 
     function excludeAccount(address account) external onlyOwner {
-        require(!_isExcluded[account], "SminemToken::account is already excluded");
+        require(address(0) != account, "SminemERC20::excluding zero address");
+        require(!_isExcluded[account], "SminemERC20::account is already excluded");
 
         uint256 reflectedBalance = _reflectedBalances[account];
         if (reflectedBalance > 0) {
@@ -72,7 +73,7 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
 
     // todo optimize with balance check like done upper
     function includeAccount(address account) external onlyOwner {
-        require(_isExcluded[account], "SminemToken::account is not excluded");
+        require(_isExcluded[account], "SminemERC20::account is not excluded");
 
         uint256 rate = _getCurrentReflectionRate();
         uint256 balance = _balances[account];
@@ -104,7 +105,7 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         view
         returns (uint256)
     {
-        require(amount <= _totalSupply, "SminemToken::token amount must be less than supply");
+        require(amount <= _totalSupply, "SminemERC20::token amount must be less than supply");
 
         TransferData memory td = _getTransferData(amount);
         if (deductTransferFee)
@@ -127,7 +128,7 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
     function convertReflectedToActual(uint256 reflectedAmount) public view returns (uint256) {
         require(
             reflectedAmount <= _reflectTotalSupply,
-            "SminemToken::amount must be less than total reflections"
+            "SminemERC20::amount must be less than total reflections"
         );
         uint256 rate = _getCurrentReflectionRate();
         return reflectedAmount.div(rate);
@@ -137,9 +138,9 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
      * @dev An override of the classical implementation
      */
     function _transfer(address sender, address recipient, uint256 amount) internal {
-        require(sender != address(0), "SminemToken::transfer from the zero address");
-        require(recipient != address(0), "SminemToken::transfer to the zero address");
-        require(amount > 0, "SminemToken::transfer amount must be greater than zero");
+        require(sender != address(0), "SminemERC20::transfer from the zero address");
+        require(recipient != address(0), "SminemERC20::transfer to the zero address");
+        require(amount > 0, "SminemERC20::transfer amount must be greater than zero");
 
         TransferData memory td = _getTransferData(amount);
 
@@ -216,8 +217,8 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
      * @dev Gets a "common" and a reflected transfer data.
      *
      * For more information see:
-     * - {SminemToken-_getTokenTransferData};
-     * - {SminemToken-_getReflectedTransferData}.
+     * - {SminemERC20-_getTokenTransferData};
+     * - {SminemERC20-_getReflectedTransferData}.
      */
     function _getTransferData(uint256 amount) private view returns (TransferData memory) {
         (uint256 tokenCleanedAmount, uint256 tokenFee) = _getCommonTransferData(amount);
