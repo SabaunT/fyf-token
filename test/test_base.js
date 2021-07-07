@@ -27,8 +27,6 @@ const SminemERC20 = artifacts.require('SminemERC20');
  *     2.3.2. Safe against bug, showed in the safemoon (check it on both reflect and sminem) (done)
  *     2.3.3. Zero balance (done)
  *     2.3.4. Test without newly setting reflectedBalance to balance*rate (2.3.2) (done)
- * 3. convertActualToReflected - not sure if the name states the idea.
- * Test convertActualToReflected(super.balanceOf)
  * 4. Transfers without an exclusion - guarantee, that fees are going to be distributed
  *   4.1. sending yourself (done)
  *   4.2. sending between 3-4 addresses. (done)

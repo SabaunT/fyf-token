@@ -102,20 +102,6 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         return _feeDistributedTotal;
     }
 
-    // TODO not sure if the name states the idea. Test convertActualToReflected(super.balanceOf)
-    function convertActualToReflected(uint256 amount, bool deductTransferFee)
-        external
-        view
-        returns (uint256)
-    {
-        require(amount <= _totalSupply, "SminemERC20::token amount must be less than supply");
-
-        TransferData memory td = _getTransferData(amount);
-        if (deductTransferFee)
-            return td.reflectedCleanedAmount;
-        return td.reflectedAmount;
-    }
-
     /**
      * @dev An override of the classical implementation
      */
