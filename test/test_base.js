@@ -27,6 +27,7 @@ const SminemERC20 = artifacts.require('SminemERC20');
  * 5. reflectSupply < rate? getSupply values fn
  */
 
+// todo проверь заново логику тестов
 contract('SminemToken', async function (accounts) {
     // constructor params
     const name = "SminemERC20";
@@ -424,7 +425,7 @@ contract('SminemToken', async function (accounts) {
             assert.equal(balanceBeforeOwner.toString(), balanceAfterOwner.toString());
         })
 
-        it("Transfers after inclusion change balances the right way (account3->account1)", async() => {
+        it("Transfer after inclusion change balances the right way (account3->account1)", async() => {
             let transferringAmount = toBNWithDecimals(2000);
             let fee = transferringAmount.div(new BN(100));
             let expectedBalances = await getExpectedBalancesAfterTransfer(account3, account1, transferringAmount);
@@ -503,7 +504,7 @@ contract('SminemToken', async function (accounts) {
             let transferringAmount = toBNWithDecimals(2000);
             let fee = transferringAmount.div(new BN(100));
 
-            let balanceExcludedBefore = await tokenInst.balanceOf(account1);
+            let balanceBeforeAcc1 = await tokenInst.balanceOf(account1);
             let balanceBeforeAcc2 = await tokenInst.balanceOf(account2);
             let balanceBeforeAcc3 = await tokenInst.balanceOf(account3);
             let balanceBeforeOwner = await tokenInst.balanceOf(owner);
@@ -511,19 +512,49 @@ contract('SminemToken', async function (accounts) {
             // very important to be before distributions calculation
             excludedAmount = excludedAmount.sub(transferringAmount)
 
-            let expectedBalanceExcluded = balanceExcludedBefore.sub(transferringAmount);
+            let expectedBalanceAcc1 = balanceBeforeAcc1.sub(transferringAmount);
             let expectedBalanceAcc3 = newFeeDistributionWithExclusion(balanceBeforeAcc3.add(transferringAmount.sub(fee)), fee);
             let expectedBalanceOwner = newFeeDistributionWithExclusion(balanceBeforeOwner, fee);
 
             await tokenInst.transfer(account3, transferringAmount, {from: account1});
 
-            let balanceExcludedAfter = await tokenInst.balanceOf(account1);
+            let balanceAfterAcc1 = await tokenInst.balanceOf(account1);
             let balanceAfterAcc2 = await tokenInst.balanceOf(account2);
             let balanceAfterAcc3 = await tokenInst.balanceOf(account3);
             let balanceAfterOwner = await tokenInst.balanceOf(owner);
 
-            assert.equal(expectedBalanceExcluded.toString(), balanceExcludedAfter.toString());
+            assert.equal(expectedBalanceAcc1.toString(), balanceAfterAcc1.toString());
             assert.equal(balanceBeforeAcc2.toString(), balanceAfterAcc2.toString());
+            assertBalanceFeeDistribution(expectedBalanceAcc3, balanceAfterAcc3);
+            assertBalanceFeeDistribution(expectedBalanceOwner, balanceAfterOwner);
+        })
+
+        it("Transfer between excluded (account1->account2)", async() => {
+            let transferringAmount = toBNWithDecimals(1000);
+            let fee = transferringAmount.div(new BN(100));
+
+            let balanceBeforeAcc1 = await tokenInst.balanceOf(account1);
+            let balanceBeforeAcc2 = await tokenInst.balanceOf(account2);
+            let balanceBeforeAcc3 = await tokenInst.balanceOf(account3);
+            let balanceBeforeOwner = await tokenInst.balanceOf(owner);
+
+            // very important to be before distributions calculation
+            excludedAmount = excludedAmount.sub(fee)
+
+            let expectedBalanceAcc1 = balanceBeforeAcc1.sub(transferringAmount);
+            let expectedBalanceAcc2 = balanceBeforeAcc2.add(transferringAmount.sub(fee))
+            let expectedBalanceAcc3 = newFeeDistributionWithExclusion(balanceBeforeAcc3, fee);
+            let expectedBalanceOwner = newFeeDistributionWithExclusion(balanceBeforeOwner, fee);
+
+            await tokenInst.transfer(account2, transferringAmount, {from: account1});
+
+            let balanceAfterAcc1 = await tokenInst.balanceOf(account1);
+            let balanceAfterAcc2 = await tokenInst.balanceOf(account2);
+            let balanceAfterAcc3 = await tokenInst.balanceOf(account3);
+            let balanceAfterOwner = await tokenInst.balanceOf(owner);
+
+            assert.equal(expectedBalanceAcc1.toString(), balanceAfterAcc1.toString());
+            assert.equal(expectedBalanceAcc2.toString(), balanceAfterAcc2.toString());
             assertBalanceFeeDistribution(expectedBalanceAcc3, balanceAfterAcc3);
             assertBalanceFeeDistribution(expectedBalanceOwner, balanceAfterOwner);
         })

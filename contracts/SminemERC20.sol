@@ -145,8 +145,7 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         require(amount > 0, "SminemERC20::transfer amount must be greater than zero");
 
         TransferData memory td = _getTransferData(amount);
-
-        // todo exclusion global vars change!!
+        
         // todo copy paste within reflected balance change. Fix after resolving todos in transfer fns.
         if (!_isExcluded[sender] && !_isExcluded[recipient])
             _transferStandard(sender, recipient, td);
@@ -213,6 +212,8 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         _reflectedBalances[sender] = _reflectedBalances[sender].sub(td.reflectedAmount); // TODO not sure if needed, because of how inclusion is implemented. Check
         _balances[recipient] = _balances[recipient].add(td.cleanedAmount);
         _reflectedBalances[recipient] = _reflectedBalances[recipient].add(td.reflectedCleanedAmount); // TODO not sure if needed, because of how inclusion is implemented. Check
+        _excludedAmount = _excludedAmount.sub(td.fee);
+        _excludedReflectedAmount = _excludedReflectedAmount.sub(td.reflectedFee);
     }
 
     function _reflectFee(uint256 rFee, uint256 tFee) private {
