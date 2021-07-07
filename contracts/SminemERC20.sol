@@ -55,6 +55,8 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         emit Transfer(address(0), _msgSender(), _totalSupply);
     }
 
+    // liquidity pools
+    // deployer
     function excludeAccount(address account) external onlyOwner {
         require(address(0) != account, "SminemERC20::excluding zero address");
         require(!_isExcluded[account], "SminemERC20::account is already excluded");
@@ -71,7 +73,6 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         _isExcluded[account] = true;
     }
 
-    // todo optimize with balance check like done upper
     function includeAccount(address account) external onlyOwner {
         require(_isExcluded[account], "SminemERC20::account is not excluded");
 
@@ -298,14 +299,15 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         reflectedTotalSupply = reflectedTotalSupply.sub(_excludedReflectedAmount);
         totalSupply = totalSupply.sub(_excludedAmount);
 
-        if (reflectedTotalSupply < _reflectTotalSupply.div(_totalSupply)) {
+        if (reflectedTotalSupply < _reflectTotalSupply.div(_totalSupply))
             // TODO why?
             return (_reflectTotalSupply, _totalSupply);
-        }
         return (reflectedTotalSupply, totalSupply);
     }
 
-    // TODO check if this is ever called on etherscan
+    // TODO check if this is ever called (also exclude and include) on etherscan address from here https://perafinance.medium.com/safemoon-is-it-safe-though-a-detailed-explanation-of-frictionless-yield-bug-338710649846
+    // https://etherscan.io/tx/0xad155519128e701aded6b82bea62039d82d1eda5dd1ddb504c296696965b5a62
+     // can be added with proxy
 //    function reflect(uint256 tAmount) external {
 //        address sender = _msgSender();
 //        require(!_isExcluded[sender], "Excluded addresses cannot call this function");

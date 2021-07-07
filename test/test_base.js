@@ -21,13 +21,14 @@ const SminemERC20 = artifacts.require('SminemERC20');
  *   2.2. If exclusion maths (excluded amounts from supply) is correct:
  *     2.2.1. Address 0 (done)
  *     2.2.2. When excluded over, less than the supply
- *     2.2.3. if excluded address has 0 balance
+ *     2.2.3. if excluded address has 0 balance (done)
  *   2.3. If inclusion maths is correct:
  *     2.3.1. Address 0 (done)
  *     2.3.2. Safe against bug, showed in the safemoon (check it on both reflect and sminem) (done)
- *     2.3.3. Zero balance
+ *     2.3.3. Zero balance (done)
  *     2.3.4. Test without newly setting reflectedBalance to balance*rate (2.3.2) (done)
- * 3. convertActualToReflected - not sure if the name states the idea. Test convertActualToReflected(super.balanceOf)
+ * 3. convertActualToReflected - not sure if the name states the idea.
+ * Test convertActualToReflected(super.balanceOf)
  * 4. Transfers without an exclusion - guarantee, that fees are going to be distributed
  *   4.1. sending yourself (done)
  *   4.2. sending between 3-4 addresses. (done)
@@ -120,6 +121,8 @@ contract('SminemToken', async function (accounts) {
     const account2 = accounts[1];
     const account3 = accounts[2];
     const owner = accounts[3];
+    // for exclusion and inclusion tests
+    const zeroBalanceAccount = accounts[4];
 
     let tokenInst;
 
@@ -435,7 +438,7 @@ contract('SminemToken', async function (accounts) {
             assert.equal(balanceBeforeOwner.toString(), balanceAfterOwner.toString());
         })
 
-        it("Transfer after inclusion change balances the right way (account3->account1)", async() => {
+        it("Transfer after inclusion changes balances the right way (account3->account1)", async() => {
             let transferringAmount = toBNWithDecimals(2000);
             let fee = transferringAmount.div(new BN(100));
             let expectedBalances = await getExpectedBalancesAfterTransfer(account3, account1, transferringAmount);
@@ -624,132 +627,90 @@ contract('SminemToken', async function (accounts) {
             assert.equal(balanceBeforeOwner.toString(), balanceAfterOwner.toString());
         })
 
+        it("Excluding zero balance doesn't affect the distribution after transfer", async() => {
+            let transferringAmount = toBNWithDecimals(2000);
+            let fee = transferringAmount.div(new BN(100));
+            let expectedBalances = await getExpectedBalancesAfterTransfer(owner, account1, transferringAmount);
+
+            // check other balances for token distribution
+            // todo dirty
+            let balanceBeforeExcluded = await tokenInst.balanceOf(zeroBalanceAccount);
+            let balanceBeforeAcc2 = await tokenInst.balanceOf(account2);
+            let balanceBeforeAcc3 = await tokenInst.balanceOf(account3);
+            let expectedAcc2 = newFeeDistribution(balanceBeforeAcc2, fee);
+            let expectedAcc3 = newFeeDistribution(balanceBeforeAcc3, fee);
+
+            await tokenInst.excludeAccount(zeroBalanceAccount, {from: owner});
+            await tokenInst.transfer(account1, transferringAmount, {from: owner});
+
+            let balanceAfterExcluded = await tokenInst.balanceOf(zeroBalanceAccount);
+            let balanceAfterAcc1 = await tokenInst.balanceOf(account1);
+            let balanceAfterAcc3 = await tokenInst.balanceOf(account3);
+            let balanceAfterAcc2 = await tokenInst.balanceOf(account2);
+            let balanceAfterOwner = await tokenInst.balanceOf(owner);
+
+            assert.equal(balanceBeforeExcluded.toString(), balanceAfterExcluded.toString());
+            assertBalancesAfterTransfer(expectedBalances.sender, balanceAfterOwner);
+            assertBalancesAfterTransfer(expectedBalances.receiver, balanceAfterAcc1);
+            assertBalanceFeeDistribution(expectedAcc2, balanceAfterAcc2);
+            assertBalanceFeeDistribution(expectedAcc3, balanceAfterAcc3);
+        })
+
+        it("Including zero balance doesn't change balances", async() => {
+            let balanceBeforeAcc1 = await tokenInst.balanceOf(account1);
+            let balanceBeforeAcc2 = await tokenInst.balanceOf(account2);
+            let balanceBeforeAcc3 = await tokenInst.balanceOf(account3);
+            let balanceBeforeOwner = await tokenInst.balanceOf(owner);
+
+            await tokenInst.includeAccount(zeroBalanceAccount, {from: owner});
+
+            let balanceAfterAcc1 = await tokenInst.balanceOf(account1);
+            let balanceAfterAcc2 = await tokenInst.balanceOf(account2);
+            let balanceAfterAcc3 = await tokenInst.balanceOf(account3);
+            let balanceAfterOwner = await tokenInst.balanceOf(owner);
+
+            assert.equal(balanceBeforeAcc1.toString(), balanceAfterAcc1.toString());
+            assert.equal(balanceBeforeAcc2.toString(), balanceAfterAcc2.toString());
+            assert.equal(balanceBeforeAcc3.toString(), balanceAfterAcc3.toString());
+            assert.equal(balanceBeforeOwner.toString(), balanceAfterOwner.toString());
+        })
+
+        // if balance of included is 0, you still should redefine its reflected balance
+        // because its reflected balance after being excluded has different rate with
+        // the common balance (however, all the other balances have the same rate)
+        it("Exlcuded account transfers all funds and then is being included", async() => {
+            await tokenInst.excludeAccount(account3, {from: owner});
+            let balanceExcluded = await tokenInst.balanceOf(account3);
+            excludedAmount = excludedAmount.add(balanceExcluded);
+
+            let fee = balanceExcluded.div(new BN(100));
+
+            // just to change rate (important!)
+            await tokenInst.transfer(account2, toBNWithDecimals(4000), {from: owner});
+
+            excludedAmount = excludedAmount.sub(balanceExcluded);
+
+            let balanceBeforeAcc1 = await tokenInst.balanceOf(account1);
+            let balanceBeforeAcc2 = await tokenInst.balanceOf(account2);
+            let balanceBeforeOwner = await tokenInst.balanceOf(owner);
+
+            let expectedAcc1 = newFeeDistributionWithExclusion(balanceBeforeAcc1, fee);
+            let expectedAcc2 = newFeeDistributionWithExclusion(balanceBeforeAcc2, fee);
+            let expectedAcc3 = balanceExcluded.sub(balanceExcluded);
+            let expectedOwner = newFeeDistributionWithExclusion(balanceBeforeOwner.add(balanceExcluded.sub(fee)), fee);
+
+            await tokenInst.transfer(owner, balanceExcluded, {from: account3});
+            await tokenInst.includeAccount(account3, {from: owner});
+
+            let balanceAfterAcc1 = await tokenInst.balanceOf(account1);
+            let balanceAfterAcc2 = await tokenInst.balanceOf(account2);
+            let balanceExcludedAfter = await tokenInst.balanceOf(account3);
+            let balanceAfterOwner = await tokenInst.balanceOf(owner);
+
+            assert.equal(expectedAcc3.toString(), balanceExcludedAfter.toString())
+            assertBalanceFeeDistribution(expectedAcc1, balanceAfterAcc1);
+            assertBalanceFeeDistribution(expectedAcc2, balanceAfterAcc2);
+            assertBalanceFeeDistribution(expectedOwner, balanceAfterOwner);
+        })
     })
-
-    /*
-
-    it('should transfer tokens correctly between three accounts', async function() {
-        let tokensToSend = new BN(d(50000, 9));
-        let tokensToReceive = tokensToSend.mul(new BN(98)).div(new BN(100)); // 98%
-        let totalSupplyBefore = await token.totalSupply();
-        let balance1before = await token.balanceOf(account1);
-        let balance2before = await token.balanceOf(account2);
-        let balance3before = await token.balanceOf(account3);
-        await token.transfer(account2, tokensToSend, { from: account1 });
-        let totalSupplyAfter = await token.totalSupply();
-        let balance1after = await token.balanceOf(account1);
-        let balance2after = await token.balanceOf(account2);
-        let balance3after = await token.balanceOf(account3);
-        let diff1 = balance1after.add(tokensToSend).sub(balance1before);
-        let diff2 = balance2after.sub(balance2before).sub(tokensToReceive);
-        let diff3 = balance3after.sub(balance3before);
-        let ratio1 = balance1after.div(diff1);
-        //let ratio2 = balance2after.div(diff2);
-        //let ratio3 = balance3after.div(diff3);
-        //expect(ratio1).to.be.bignumber.equal(ratio2);
-        //expect(ratio2).to.be.bignumber.equal(ratio3);
-        log('------------');
-        log('BEFORE');
-        log('total:\t\t' + totalSupplyBefore.toString());
-        log('balance1:\t' + balance1before.toString());
-        log('balance2:\t' + balance2before.toString());
-        log('balance3:\t' + balance3before.toString());
-        log('------------');
-        log('AFTER');
-        log('total:\t\t' + totalSupplyAfter.toString());
-        log('balance1:\t' + balance1after.toString());
-        log('balance2:\t' + balance2after.toString());
-        log('balance3:\t' + balance3after.toString());
-        log('------------');
-        log('burnt:\t\t' + totalSupplyBefore.sub(totalSupplyAfter).toString());
-        log('diff1:\t\t' + diff1.toString());
-        log('diff2:\t\t' + diff2.toString());
-        log('diff3:\t\t' + diff3.toString());
-        log('diff sum:\t' + diff1.add(diff2).add(diff3));
-        log('ratio1:\t\t' + ratio1.toString());
-        //log('ratio2:\t\t' + ratio2.toString());
-        //log('ratio3:\t\t' + ratio3.toString());
-
-            tokensToSend = ether('50000');
-            tokensToReceive = tokensToSend.mul(new BN(98)).div(new BN(100)); // 98%
-            totalSupplyBefore = await token.totalSupply();
-            balance1before = await token.balanceOf(account1);
-            balance2before = await token.balanceOf(account2);
-            balance3before = await token.balanceOf(account3);
-            await token.transfer(account3, tokensToSend, { from: account1 });
-            totalSupplyAfter = await token.totalSupply();
-            balance1after = await token.balanceOf(account1);
-            balance2after = await token.balanceOf(account2);
-            balance3after = await token.balanceOf(account3);
-            diff1 = balance1after.add(tokensToSend).sub(balance1before);
-            diff2 = balance2after.sub(balance2before).sub(tokensToReceive);
-            diff3 = balance3after.sub(balance3before);
-            ratio1 = balance1after.div(diff1);
-            ratio2 = balance2after.div(diff2);
-            ratio3 = balance3after.div(diff3);
-            //expect(ratio1).to.be.bignumber.equal(ratio2);
-            //expect(ratio2).to.be.bignumber.equal(ratio3);
-            log('------------');
-            log('BEFORE');
-            log('total:\t\t' + totalSupplyBefore.toString());
-            log('balance1:\t' + balance1before.toString());
-            log('balance2:\t' + balance2before.toString());
-            log('balance3:\t' + balance3before.toString());
-            log('------------');
-            log('AFTER');
-            log('total:\t\t' + totalSupplyAfter.toString());
-            log('balance1:\t' + balance1after.toString());
-            log('balance2:\t' + balance2after.toString());
-            log('balance3:\t' + balance3after.toString());
-            log('------------');
-            log('burnt:\t\t' + totalSupplyBefore.sub(totalSupplyAfter).toString());
-            log('diff1:\t\t' + diff1.toString());
-            log('diff2:\t\t' + diff2.toString());
-            log('diff3:\t\t' + diff3.toString());
-            log('diff sum:\t' + diff1.add(diff2).add(diff3));
-            log('ratio1:\t\t' + ratio1.toString());
-            log('ratio2:\t\t' + ratio2.toString());
-            log('ratio3:\t\t' + ratio3.toString());
-    });
-
-    it('should stop burning tokens as soon as the total amount reaches 1% of the initial', async function () {
-      await token.burn(SUPPLY1, { from: account1 });
-      await token.burn(SUPPLY3, { from: account3 });
-      const balanceBeforeBurn = await token.balanceOf(account2);
-      expect(balanceBeforeBurn).to.be.bignumber.equal(SUPPLY2);
-      await token.burn(balanceBeforeBurn.sub(BURN_STOP_SUPPLY), { from: account2 });
-      const balanceAfterBurn = await token.balanceOf(account2);
-      const totalSupplyBeforeSend = await token.totalSupply();
-      await token.transfer(account1, ether('1000'), { from: account2 });
-      const totalSupplyAfterSend = await token.totalSupply();
-      expect(totalSupplyAfterSend).to.be.bignumber.equal(totalSupplyBeforeSend);
-      const balance1 = await token.balanceOf(account1);
-      const balance2 = await token.balanceOf(account2);
-      expect(balanceAfterBurn).to.be.bignumber.equal(balance1.add(balance2).addn(1));
-    });
-
-    it('should burn the correct amount of tokens when reaching the auto-burn limit', async function() {
-      await token.burn(SUPPLY1, { from: account1 });
-      await token.burn(SUPPLY3, { from: account3 });
-      const balanceBeforeBurn = await token.balanceOf(account2);
-      expect(balanceBeforeBurn).to.be.bignumber.equal(SUPPLY2);
-      const amountToBurn = balanceBeforeBurn.sub(BURN_STOP_SUPPLY).sub(ether('3333'));
-      await token.burn(amountToBurn, { from: account2 });
-      const balanceAfterBurn = await token.balanceOf(account2);
-      // just to make this test case clearer
-      // the user's balance is 3333 tokens larger than the auto-burn limit
-      // we must not burn more than this amount
-      expect(balanceAfterBurn).to.be.bignumber.equal(ether('2103333'));
-      const expectingBurningAmount = ether('3333');
-      const totalSupplyBeforeSend = await token.totalSupply();
-      const { receipt: { transactionHash } } = await token.transfer(account1, balanceAfterBurn, { from: account2 });
-      const events = await getEvents(transactionHash, token, 'Transfer', web3);
-      const actualBurningAmount = new BN(events[0].args.value);
-      const totalSupplyAfterSend = await token.totalSupply();
-      expect(actualBurningAmount).to.be.bignumber.equal(expectingBurningAmount);
-      expect(totalSupplyAfterSend).to.be.bignumber.equal(totalSupplyBeforeSend.sub(expectingBurningAmount));
-      const balance1 = await token.balanceOf(account1);
-      expect(balanceAfterBurn).to.be.bignumber.equal(balance1.add(expectingBurningAmount));
-    });
-    */
 });
