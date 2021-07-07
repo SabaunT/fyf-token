@@ -489,10 +489,50 @@ contract('SminemToken', async function (accounts) {
             assertBalanceFeeDistribution(expectedBalanceOwner, balanceAfterOwner);
         })
 
+        it("Excluding account2, check it doesn't change balance", async() => {
+            let balanceBefore = await tokenInst.balanceOf(account2);
+            await tokenInst.excludeAccount(account2, {from: owner});
+            let balanceAfter = await tokenInst.balanceOf(account2);
+
+            excludedAmount = excludedAmount.add(balanceBefore);
+
+            assert.equal(balanceBefore.toString(), balanceAfter.toString());
+        })
+
+        it("Transfer from excluded to included (account1->account3)", async() => {
+            let transferringAmount = toBNWithDecimals(2000);
+            let fee = transferringAmount.div(new BN(100));
+
+            let balanceExcludedBefore = await tokenInst.balanceOf(account1);
+            let balanceBeforeAcc2 = await tokenInst.balanceOf(account2);
+            let balanceBeforeAcc3 = await tokenInst.balanceOf(account3);
+            let balanceBeforeOwner = await tokenInst.balanceOf(owner);
+
+            // very important to be before distributions calculation
+            excludedAmount = excludedAmount.sub(transferringAmount)
+
+            let expectedBalanceExcluded = balanceExcludedBefore.sub(transferringAmount);
+            let expectedBalanceAcc3 = newFeeDistributionWithExclusion(balanceBeforeAcc3.add(transferringAmount.sub(fee)), fee);
+            let expectedBalanceOwner = newFeeDistributionWithExclusion(balanceBeforeOwner, fee);
+
+            await tokenInst.transfer(account3, transferringAmount, {from: account1});
+
+            let balanceExcludedAfter = await tokenInst.balanceOf(account1);
+            let balanceAfterAcc2 = await tokenInst.balanceOf(account2);
+            let balanceAfterAcc3 = await tokenInst.balanceOf(account3);
+            let balanceAfterOwner = await tokenInst.balanceOf(owner);
+
+            assert.equal(expectedBalanceExcluded.toString(), balanceExcludedAfter.toString());
+            assert.equal(balanceBeforeAcc2.toString(), balanceAfterAcc2.toString());
+            assertBalanceFeeDistribution(expectedBalanceAcc3, balanceAfterAcc3);
+            assertBalanceFeeDistribution(expectedBalanceOwner, balanceAfterOwner);
+        })
+
     })
 
     // todo продолжи тесты:
     // - сделай трансферы между выкл, от выкл и к выкл.
+    // - сделай выкл к самому себе (кажется, тоже самое, что и между эксклюдами)
 
     /*
 
