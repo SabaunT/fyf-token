@@ -28,10 +28,8 @@ Make sure you have npx package installed globally.
 3. Выбери между комиссией 2% и burn.
 Есть сомнения по поводу bunr функции: надо проверить, что произойдет при exclude,
 потому что в этом случае мы можем получить токен саплай ниже, чем количество токенов у людей в маппинге тОунд. Насколько же это опасно? Можем поломать инвариант?
-4. Ответь на оставшиеся вопросы.
-* what is the aim of the exclude list? Is it to exclude exchanges, because of some bugs with them? It seems I can wipe off the exclude list logic.
-* отличие тотал supply от суммы балансов на 1-2
-* какая математика такая лежит под rTotal...
+4. Exclude list: founders, big initial stake holders, deployers, liquidity pools.
+5. отличие тотал supply от суммы балансов на 1-2
 5. Change names after getting into deepply into the context of the protocol
 6. reflectTotalSupply lower bound (https://github.com/reflectfinance/reflect-contracts/issues/10). Seems that mechanics should be off after some time. Есть бага, которая связана с границами rTotal. Из-за того, что rTotal постоянно уменьшается
 мы можем прийти к ситуации, когда начисления комиссий поломаются. В этом случае, при достижении
