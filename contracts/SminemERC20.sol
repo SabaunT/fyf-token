@@ -122,7 +122,6 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         _innerBalances[sender] = _innerBalances[sender].sub(td.innerAmount);
         _innerBalances[recipient] = _innerBalances[recipient].add(td.innerCleanedAmount);
         
-        // TODO copy paste within reflected balance change. Fix after resolving todos in transfer fns.
         if (!_isExcluded[sender] && _isExcluded[recipient]) {
             _balances[recipient] = _balances[recipient].add(td.cleanedAmount);
             _excludedAmount = _excludedAmount.add(td.cleanedAmount);
@@ -150,6 +149,7 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
     }
 
     function _convertInnerToActual(uint256 innerAmount) private view returns (uint256) {
+        // todo ever possible?
         require(
             innerAmount <= _innerTotalSupply,
             "SminemERC20::inner amount must be less than inner total supply"
