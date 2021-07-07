@@ -31,12 +31,12 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
     mapping (address => bool) private _isExcluded;
     mapping(address => uint256) private _reflectedBalances;
 
+    Counters.Counter internal _transferCounter;
+
     uint256 private _feeDistributedTotal;
     uint256 private _reflectTotalSupply;
     uint256 private _excludedAmount;
     uint256 private _excludedReflectedAmount;
-
-    Counters.Counter private _transferCounter;
 
     // TODO shall check supply value?
     constructor(string memory name, string memory symbol, uint8 decimals, uint256 supply)
@@ -293,6 +293,13 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         uint256 reflectedTotalSupply = _reflectTotalSupply;
         uint256 totalSupply = _totalSupply;
 
+        /**
+         * Опасно тем, что рискуем попасть в неприятную ситуацию, когда
+         * вдруг резко увеличивается рэйт. Это произойдет, если большая часть тотал саплай
+         * рефлектед стал меньше excluded amount (например, было так много трансферов, что мы
+         * получили такой результат по итогу. Подумай и посчитай, может ли здесь помочь
+         * реинициализация.
+         */
         if (_excludedAmount > totalSupply || _excludedReflectedAmount > reflectedTotalSupply)
             return (reflectedTotalSupply, totalSupply);
 
@@ -300,21 +307,13 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         totalSupply = totalSupply.sub(_excludedAmount);
 
         if (reflectedTotalSupply < _reflectTotalSupply.div(_totalSupply))
-            // TODO why?
             return (_reflectTotalSupply, _totalSupply);
         return (reflectedTotalSupply, totalSupply);
     }
 
-    // TODO check if this is ever called (also exclude and include) on etherscan address from here https://perafinance.medium.com/safemoon-is-it-safe-though-a-detailed-explanation-of-frictionless-yield-bug-338710649846
+    // TODO check if this is ever called (also exclude and include) on etherscan address from here
+    //https://perafinance.medium.com/safemoon-is-it-safe-though-a-detailed-explanation-of-frictionless-yield-bug-338710649846
     // https://etherscan.io/tx/0xad155519128e701aded6b82bea62039d82d1eda5dd1ddb504c296696965b5a62
-     // can be added with proxy
-//    function reflect(uint256 tAmount) external {
-//        address sender = _msgSender();
-//        require(!_isExcluded[sender], "Excluded addresses cannot call this function");
-//        (uint256 rAmount, , , , , , ) = _getValues(tAmount);
-//        _reflectedBalances[sender] = _reflectedBalances[sender].sub(rAmount);
-//        _reflectTotal = _reflectTotal.sub(rAmount);
-//        _feeTotal = _feeTotal.add(tAmount);
-//    }
+     // reflect fn can be added with proxy - state in docs
 }
 
