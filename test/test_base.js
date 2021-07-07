@@ -23,7 +23,6 @@ const SminemERC20 = artifacts.require('SminemERC20');
  *   2.3. If inclusion maths is correct:
  *     2.3.2. Safe against bug, showed in the safemoon (check it on both reflect and sminem)
  *     2.3.3. Zero balance
- *     2.3.4. Test without newly setting reflectedBalance to balance*rate (2.3.2)
  * 3. convertActualToReflected - not sure if the name states the idea. Test convertActualToReflected(super.balanceOf)
  * 5. reflectSupply < rate? getSupply values fn
  */
@@ -412,6 +411,8 @@ contract('SminemToken', async function (accounts) {
 
             await tokenInst.includeAccount(account1, {from: owner});
 
+            excludedAmount = excludedAmount.sub(balanceBeforeAcc1);
+
             let balanceAfterAcc1 = await tokenInst.balanceOf(account1);
             let balanceAfterAcc2 = await tokenInst.balanceOf(account2);
             let balanceAfterAcc3 = await tokenInst.balanceOf(account3);
@@ -422,10 +423,75 @@ contract('SminemToken', async function (accounts) {
             assert.equal(balanceBeforeAcc3.toString(), balanceAfterAcc3.toString());
             assert.equal(balanceBeforeOwner.toString(), balanceAfterOwner.toString());
         })
+
+        it("Transfers after inclusion change balances the right way (account3->account1)", async() => {
+            let transferringAmount = toBNWithDecimals(2000);
+            let fee = transferringAmount.div(new BN(100));
+            let expectedBalances = await getExpectedBalancesAfterTransfer(account3, account1, transferringAmount);
+
+            // check other balances for token distribution
+            // todo dirty
+            let balanceBeforeAcc2 = await tokenInst.balanceOf(account2);
+            let balanceBeforeOwner = await tokenInst.balanceOf(owner);
+            let expectedAcc2 = newFeeDistribution(balanceBeforeAcc2, fee);
+            let expectedOwner = newFeeDistribution(balanceBeforeOwner, fee);
+
+            await tokenInst.transfer(account1, transferringAmount, {from: account3});
+
+            let balanceAfterAcc1 = await tokenInst.balanceOf(account1);
+            let balanceAfterAcc3 = await tokenInst.balanceOf(account3);
+            let balanceAfterAcc2 = await tokenInst.balanceOf(account2);
+            let balanceAfterOwner = await tokenInst.balanceOf(owner);
+
+            assertBalancesAfterTransfer(expectedBalances.sender, balanceAfterAcc3);
+            assertBalancesAfterTransfer(expectedBalances.receiver, balanceAfterAcc1);
+            assertBalanceFeeDistribution(expectedAcc2, balanceAfterAcc2);
+            assertBalanceFeeDistribution(expectedOwner, balanceAfterOwner);
+        })
+
+        it("Excluding account1 again, check it doesn't change balance", async() => {
+            let balanceBefore = await tokenInst.balanceOf(account1);
+            await tokenInst.excludeAccount(account1, {from: owner});
+            let balanceAfter = await tokenInst.balanceOf(account1);
+
+            excludedAmount = excludedAmount.add(balanceBefore);
+
+            assert.equal(balanceBefore.toString(), balanceAfter.toString());
+        })
+
+        it("Transfer to excluded (owner->account1)", async() => {
+            let transferringAmount = toBNWithDecimals(1000);
+            let fee = transferringAmount.div(new BN(100));
+
+            let balanceExcludedBefore = await tokenInst.balanceOf(account1);
+            let balanceBeforeAcc2 = await tokenInst.balanceOf(account2);
+            let balanceBeforeAcc3 = await tokenInst.balanceOf(account3);
+            let balanceBeforeOwner = await tokenInst.balanceOf(owner);
+
+            // very important to be before distributions calculation
+            excludedAmount = excludedAmount.add(transferringAmount.sub(fee))
+
+            let expectedBalanceExcluded = balanceExcludedBefore.add(transferringAmount.sub(fee));
+            let expectedBalanceAcc2 = newFeeDistributionWithExclusion(balanceBeforeAcc2, fee);
+            let expectedBalanceAcc3 = newFeeDistributionWithExclusion(balanceBeforeAcc3, fee);
+            let expectedBalanceOwner = newFeeDistributionWithExclusion(balanceBeforeOwner.sub(transferringAmount), fee);
+
+            await tokenInst.transfer(account1, transferringAmount, {from: owner});
+
+            let balanceExcludedAfter = await tokenInst.balanceOf(account1);
+            let balanceAfterAcc2 = await tokenInst.balanceOf(account2);
+            let balanceAfterAcc3 = await tokenInst.balanceOf(account3);
+            let balanceAfterOwner = await tokenInst.balanceOf(owner);
+
+            assert.equal(expectedBalanceExcluded.toString(), balanceExcludedAfter.toString());
+            assertBalanceFeeDistribution(expectedBalanceAcc2, balanceAfterAcc2);
+            assertBalanceFeeDistribution(expectedBalanceAcc3, balanceAfterAcc3);
+            assertBalanceFeeDistribution(expectedBalanceOwner, balanceAfterOwner);
+        })
+
     })
 
     // todo продолжи тесты:
-    // - сделай еще один трансфер - проверь распределение комиссий
     // - сделай трансферы между выкл, от выкл и к выкл.
 
     /*

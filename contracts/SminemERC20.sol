@@ -183,6 +183,8 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         _reflectedBalances[sender] = _reflectedBalances[sender].sub(td.reflectedAmount);
         _balances[recipient] = _balances[recipient].add(td.cleanedAmount);
         _reflectedBalances[recipient] = _reflectedBalances[recipient].add(td.reflectedCleanedAmount); // TODO not sure if needed, because of how inclusion is implemented. Check
+        _excludedAmount = _excludedAmount.add(td.cleanedAmount);
+        _excludedReflectedAmount = _excludedReflectedAmount.add(td.reflectedCleanedAmount);
     }
 
     function _transferFromExcluded(
