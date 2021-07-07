@@ -337,15 +337,6 @@ contract('SminemToken', async function (accounts) {
 
             let balanceExcludedAfter = await tokenInst.balanceOf(account1);
 
-            // todo wipe off
-            // let balanceAfterAcc2 = await tokenInst.balanceOf(account2);
-            // let balanceAfterAcc3 = await tokenInst.balanceOf(account3);
-            // let balanceAfterOwner = await tokenInst.balanceOf(owner);
-            // console.log(balanceExcludedAfter.toString());
-            // console.log(balanceAfterAcc2.toString())
-            // console.log(balanceAfterAcc3.toString())
-            // console.log(balanceAfterOwner.toString())
-
             assert.equal(balanceExcludedBefore.toString(), balanceExcludedAfter.toString());
         })
 
@@ -358,7 +349,6 @@ contract('SminemToken', async function (accounts) {
             let balanceBeforeOwner = await tokenInst.balanceOf(owner);
 
             await tokenInst.includeAccount(account1, {from: owner});
-
             excludedAmount = excludedAmount.sub(balanceBeforeAcc1);
 
             let balanceAfterAcc1 = await tokenInst.balanceOf(account1);
@@ -537,7 +527,7 @@ contract('SminemToken', async function (accounts) {
             assertAfterFeeDistribution(expectedBalanceOwner, balanceAfterOwner);
         })
 
-        it("Including excluded accounts", async() => {
+        it("Including excluded accounts: doesn't change balances", async() => {
             //https://perafinance.medium.com/safemoon-is-it-safe-though-a-detailed-explanation-of-frictionless-yield-bug-338710649846
 
             let balanceBeforeAcc1 = await tokenInst.balanceOf(account1);
@@ -588,25 +578,6 @@ contract('SminemToken', async function (accounts) {
             assertAfterFeeDistribution(expectedBalances.receiver, balanceAfterAcc1);
             assertAfterFeeDistribution(expectedAcc2, balanceAfterAcc2);
             assertAfterFeeDistribution(expectedAcc3, balanceAfterAcc3);
-        })
-
-        it("Including zero balance doesn't change balances", async() => {
-            let balanceBeforeAcc1 = await tokenInst.balanceOf(account1);
-            let balanceBeforeAcc2 = await tokenInst.balanceOf(account2);
-            let balanceBeforeAcc3 = await tokenInst.balanceOf(account3);
-            let balanceBeforeOwner = await tokenInst.balanceOf(owner);
-
-            await tokenInst.includeAccount(zeroBalanceAccount, {from: owner});
-
-            let balanceAfterAcc1 = await tokenInst.balanceOf(account1);
-            let balanceAfterAcc2 = await tokenInst.balanceOf(account2);
-            let balanceAfterAcc3 = await tokenInst.balanceOf(account3);
-            let balanceAfterOwner = await tokenInst.balanceOf(owner);
-
-            assert.equal(balanceBeforeAcc1.toString(), balanceAfterAcc1.toString());
-            assert.equal(balanceBeforeAcc2.toString(), balanceAfterAcc2.toString());
-            assert.equal(balanceBeforeAcc3.toString(), balanceAfterAcc3.toString());
-            assert.equal(balanceBeforeOwner.toString(), balanceAfterOwner.toString());
         })
 
         // if balance of included is 0, you still should redefine its reflected balance
