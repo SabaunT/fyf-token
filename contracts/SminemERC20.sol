@@ -21,25 +21,24 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         uint256 amount;
         uint256 cleanedAmount;
         uint256 fee;
-        uint256 reflectedAmount;
-        uint256 reflectedCleanedAmount;
-        uint256 reflectedFee;
+        uint256 innerAmount;
+        uint256 innerCleanedAmount;
+        uint256 innerFee;
     }
 
     uint256 private constant _feePercent = 1;
 
     mapping (address => bool) private _isExcluded;
-    mapping(address => uint256) private _reflectedBalances;
+    mapping(address => uint256) private _innerBalances;
+
+    Counters.Counter internal _transferCounter;
 
     uint256 private _feeDistributedTotal;
-    uint256 private _reflectTotalSupply;
+    uint256 private _innerTotalSupply;
     uint256 private _excludedAmount;
-    uint256 private _excludedReflectedAmount;
+    uint256 private _excludedInnerAmount;
 
-    Counters.Counter private _transferCounter;
-
-    // TODO try making less decimals for more precision
-    // TODO shall check supply value?
+    // TODO waiting for constants from founders
     constructor(string memory name, string memory symbol, uint8 decimals, uint256 supply)
         ERC20Detailed(name, symbol, decimals)
         public
@@ -50,40 +49,41 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
 
         _totalSupply = supply * 10**uint256(decimals);
         uint256 _MAX = ~uint256(0);
-        _reflectTotalSupply = _MAX - (_MAX % _totalSupply);
-        _reflectedBalances[_msgSender()] = _reflectTotalSupply;
+        _innerTotalSupply = _MAX - (_MAX % _totalSupply);
+        _innerBalances[_msgSender()] = _innerTotalSupply;
 
         emit Transfer(address(0), _msgSender(), _totalSupply);
     }
 
     function excludeAccount(address account) external onlyOwner {
-        require(!_isExcluded[account], "SminemToken::account is already excluded");
+        require(address(0) != account, "SminemERC20::excluding zero address");
+        require(!_isExcluded[account], "SminemERC20::account is already excluded");
 
-        uint256 reflectedBalance = _reflectedBalances[account];
-        if (reflectedBalance > 0) {
-            uint256 tokenBalance = convertReflectedToActual(reflectedBalance);
+        uint256 innerBalance = _innerBalances[account];
+        if (innerBalance > 0) {
+            uint256 tokenBalance = _convertInnerToActual(innerBalance);
 
             _balances[account] = tokenBalance;
 
             _excludedAmount = _excludedAmount.add(tokenBalance);
-            _excludedReflectedAmount = _excludedReflectedAmount.add(reflectedBalance);
+            _excludedInnerAmount = _excludedInnerAmount.add(innerBalance);
         }
         _isExcluded[account] = true;
     }
 
-    // todo optimize with balance check like done upper
-    // TODO address(0)
     function includeAccount(address account) external onlyOwner {
-        require(_isExcluded[account], "SminemToken::account is not excluded");
+        require(_isExcluded[account], "SminemERC20::account is not excluded");
 
         uint256 rate = _getCurrentReflectionRate();
         uint256 balance = _balances[account];
-        uint256 reflectedBalance = _reflectedBalances[account];
+        uint256 newInnerBalance = balance.mul(rate);
 
         _excludedAmount = _excludedAmount.sub(balance);
-        _excludedReflectedAmount = _excludedReflectedAmount.sub(reflectedBalance);
+        // todo check for no errors in subtraction
+        _excludedInnerAmount = _excludedInnerAmount.sub(newInnerBalance);
 
-        _reflectedBalances[account] = balance.mul(rate); // TODO test without it
+        // todo state in docs behaviour when _reflectedBalances[account] isn't changed
+        _innerBalances[account] = newInnerBalance;
         _balances[account] = 0;
         _isExcluded[account] = false;
     }
@@ -100,210 +100,129 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         return _feeDistributedTotal;
     }
 
-    // TODO not sure if the name states the idea. Test convertActualToReflected(super.balanceOf)
-    function convertActualToReflected(uint256 amount, bool deductTransferFee)
-        external
-        view
-        returns (uint256)
-    {
-        require(amount <= _totalSupply, "SminemToken::token amount must be less than supply");
-
-        TransferData memory td = _getTransferData(amount);
-        if (deductTransferFee)
-            return td.reflectedCleanedAmount;
-        return td.reflectedAmount;
-    }
-
     /**
      * @dev An override of the classical implementation
      */
     function balanceOf(address account) public view returns (uint256) {
         if (_isExcluded[account])
             return ERC20.balanceOf(account);
-        return convertReflectedToActual(_reflectedBalances[account]);
-    }
-
-    /**
-     * @dev Converts reflected amount to actual token balance.
-     */
-    function convertReflectedToActual(uint256 reflectedAmount) public view returns (uint256) {
-        require(
-            reflectedAmount <= _reflectTotalSupply,
-            "SminemToken::amount must be less than total reflections"
-        );
-        uint256 rate = _getCurrentReflectionRate();
-        return reflectedAmount.div(rate);
+        return _convertInnerToActual(_innerBalances[account]);
     }
 
     /**
      * @dev An override of the classical implementation
      */
     function _transfer(address sender, address recipient, uint256 amount) internal {
-        require(sender != address(0), "SminemToken::transfer from the zero address");
-        require(recipient != address(0), "SminemToken::transfer to the zero address");
-        require(amount > 0, "SminemToken::transfer amount must be greater than zero");
+        require(sender != address(0), "SminemERC20::transfer from the zero address");
+        require(recipient != address(0), "SminemERC20::transfer to the zero address");
+        require(amount > 0, "SminemERC20::transfer amount must be greater than zero");
 
         TransferData memory td = _getTransferData(amount);
 
-        // todo copy paste within reflected balance change. Fix after resolving todos in transfer fns.
-        if (!_isExcluded[sender] && !_isExcluded[recipient])
-            _transferStandard(sender, recipient, td);
-        else if (!_isExcluded[sender] && _isExcluded[recipient])
-            _transferToExcluded(sender, recipient, td);
-        else if (_isExcluded[sender] && !_isExcluded[recipient])
-            _transferFromExcluded(sender, recipient, td);
-        else
-            _transferBothExcluded(sender, recipient, td);
+        _innerBalances[sender] = _innerBalances[sender].sub(td.innerAmount);
+        _innerBalances[recipient] = _innerBalances[recipient].add(td.innerCleanedAmount);
+        
+        if (!_isExcluded[sender] && _isExcluded[recipient]) {
+            _balances[recipient] = _balances[recipient].add(td.cleanedAmount);
+            _excludedAmount = _excludedAmount.add(td.cleanedAmount);
+            _excludedInnerAmount = _excludedInnerAmount.add(td.innerCleanedAmount);
+        } else if (_isExcluded[sender] && !_isExcluded[recipient]) {
+            _balances[sender] = _balances[sender].sub(td.amount);
+            // TODO check no errors because of the sub
+            _excludedAmount = _excludedAmount.sub(td.amount);
+            _excludedInnerAmount = _excludedInnerAmount.sub(td.innerAmount);
+        } else if (_isExcluded[sender] && _isExcluded[recipient]) {
+            _balances[sender] = _balances[sender].sub(td.amount);
+            _balances[recipient] = _balances[recipient].add(td.cleanedAmount);
+            _excludedAmount = _excludedAmount.sub(td.fee);
+            _excludedInnerAmount = _excludedInnerAmount.sub(td.innerFee);
+        }
 
-        _reflectFee(td.reflectedFee, td.fee);
+        _reflectFee(td.innerFee, td.fee);
         _transferCounter.increment();
         emit Transfer(sender, recipient, td.cleanedAmount);
     }
 
-    function _transferStandard(
-        address sender,
-        address recipient,
-        TransferData memory td
-    )
-        internal
-    {
-        _reflectedBalances[sender] = _reflectedBalances[sender].sub(td.reflectedAmount);
-        _reflectedBalances[recipient] = _reflectedBalances[recipient].add(td.reflectedCleanedAmount);
+    function _reflectFee(uint256 innerFee, uint256 outerFee) private {
+        _innerTotalSupply = _innerTotalSupply.sub(innerFee);
+        _feeDistributedTotal = _feeDistributedTotal.add(outerFee);
     }
 
-    function _transferToExcluded(
-        address sender,
-        address recipient,
-        TransferData memory td
-    )
-        internal
-    {
-        _reflectedBalances[sender] = _reflectedBalances[sender].sub(td.reflectedAmount);
-        _balances[recipient] = _balances[recipient].add(td.cleanedAmount);
-        _reflectedBalances[recipient] = _reflectedBalances[recipient].add(td.reflectedCleanedAmount); // TODO not sure if needed, because of how inclusion is implemented. Check
+    function _convertInnerToActual(uint256 innerAmount) private view returns (uint256) {
+        // todo ever possible?
+        require(
+            innerAmount <= _innerTotalSupply,
+            "SminemERC20::inner amount must be less than inner total supply"
+        );
+        uint256 rate = _getCurrentReflectionRate();
+        return innerAmount.div(rate);
     }
 
-    function _transferFromExcluded(
-        address sender,
-        address recipient,
-        TransferData memory td
-    )
-        internal
-    {
-        _balances[sender] = _balances[sender].sub(td.amount);
-        _reflectedBalances[sender] = _reflectedBalances[sender].sub(td.reflectedAmount); // TODO not sure if needed, because of how inclusion is implemented. Check
-        _reflectedBalances[recipient] = _reflectedBalances[recipient].add(td.reflectedCleanedAmount);
-    }
-
-    function _transferBothExcluded(
-        address sender,
-        address recipient,
-        TransferData memory td
-    )
-        internal
-    {
-        _balances[sender] = _balances[sender].sub(td.amount);
-        _reflectedBalances[sender] = _reflectedBalances[sender].sub(td.reflectedAmount); // TODO not sure if needed, because of how inclusion is implemented. Check
-        _balances[recipient] = _balances[recipient].add(td.cleanedAmount);
-        _reflectedBalances[recipient] = _reflectedBalances[recipient].add(td.reflectedCleanedAmount); // TODO not sure if needed, because of how inclusion is implemented. Check
-    }
-
-    function _reflectFee(uint256 rFee, uint256 tFee) private {
-        _reflectTotalSupply = _reflectTotalSupply.sub(rFee);
-        _feeDistributedTotal = _feeDistributedTotal.add(tFee);
-    }
-
-    /**
-     * @dev Gets a "common" and a reflected transfer data.
-     *
-     * For more information see:
-     * - {SminemToken-_getTokenTransferData};
-     * - {SminemToken-_getReflectedTransferData}.
-     */
     function _getTransferData(uint256 amount) private view returns (TransferData memory) {
-        (uint256 tokenCleanedAmount, uint256 tokenFee) = _getCommonTransferData(amount);
+        (uint256 tokenCleanedAmount, uint256 tokenFee) = _getTransferDataWithExternalValues(amount);
         (
-            uint256 reflectedAmount,
-            uint256 reflectedCleanedAmount,
-            uint256 reflectedFee
-        ) = _getReflectedTransferData(amount, tokenFee);
+            uint256 innerAmount,
+            uint256 innerCleanedAmount,
+            uint256 innerFee
+        ) = _getTransferDataWithInnerValues(amount, tokenFee);
         return TransferData(
             amount,
             tokenCleanedAmount,
             tokenFee,
-            reflectedAmount,
-            reflectedCleanedAmount,
-            reflectedFee
+            innerAmount,
+            innerCleanedAmount,
+            innerFee
         );
     }
 
-    /**
-     * @dev Gets transfer data from the token transfer amount.
-     *
-     * By transfer data we mean fee amount and a transfer amount cleaned from fee.
-     */
-    function _getCommonTransferData(uint256 amount) private pure returns (uint256, uint256) {
+    function _getTransferDataWithExternalValues(uint256 amount) private pure returns (uint256, uint256) {
         uint256 fee = amount.mul(_feePercent).div(100);
         uint256 cleanedAmount = amount.sub(fee);
         return (cleanedAmount, fee);
     }
 
-    /**
-     * @dev Gets reflected transfer data from a "common" transfer data
-     *
-     * By reflected transfer data we mean multiplied with a rate transfer amount, fee amount,
-     * transfer amount cleaned from fee.
-     */
-    function _getReflectedTransferData(uint256 amount, uint256 fee)
+    function _getTransferDataWithInnerValues(uint256 amount, uint256 fee)
         private
         view
         returns (uint256, uint256, uint256)
     {
         uint256 rate = _getCurrentReflectionRate();
-        uint256 reflectedAmount = amount.mul(rate);
-        uint256 reflectedFee = fee.mul(rate);
-        uint256 reflectedCleanedAmount = reflectedAmount.sub(reflectedFee);
-        return (reflectedAmount, reflectedCleanedAmount, reflectedFee);
+        uint256 innerAmount = amount.mul(rate);
+        uint256 innerFee = fee.mul(rate);
+        uint256 innerCleanedAmount = innerAmount.sub(innerFee);
+        return (innerAmount, innerCleanedAmount, innerFee);
     }
 
-    /**
-     * @dev Gets reflection rate based on current reflect and token supply.
-     *
-     * The rate is used then to get the actual token balance of the account.
-     */
     function _getCurrentReflectionRate() private view returns (uint256) {
         (uint256 reflectedTotalSupply, uint256 totalSupply) = _getCurrentSupplyValues();
         return reflectedTotalSupply.div(totalSupply);
     }
 
-    /**
-     * @dev Gets reflect and token supply without balances of excluded accounts.
-     *
-     */
     function _getCurrentSupplyValues() private view returns (uint256, uint256) {
-        uint256 reflectedTotalSupply = _reflectTotalSupply;
+        uint256 innerTotalSupply = _innerTotalSupply;
         uint256 totalSupply = _totalSupply;
 
-        if (_excludedAmount > totalSupply || _excludedReflectedAmount > reflectedTotalSupply)
-            return (reflectedTotalSupply, totalSupply);
+        /** todo
+         * Опасно тем, что рискуем попасть в неприятную ситуацию, когда
+         * вдруг резко увеличивается рэйт. Это произойдет, если большая часть тотал саплай
+         * рефлектед стал меньше excluded amount (например, было так много трансферов, что мы
+         * получили такой результат по итогу. Подумай и посчитай, может ли здесь помочь
+         * реинициализация.
+         */
+        if (_excludedAmount > totalSupply || _excludedInnerAmount > innerTotalSupply)
+            return (innerTotalSupply, totalSupply);
 
-        reflectedTotalSupply = reflectedTotalSupply.sub(_excludedReflectedAmount);
+        innerTotalSupply = innerTotalSupply.sub(_excludedInnerAmount);
         totalSupply = totalSupply.sub(_excludedAmount);
 
-        if (reflectedTotalSupply < _reflectTotalSupply.div(_totalSupply)) {
-            // TODO why?
-            return (_reflectTotalSupply, _totalSupply);
-        }
-        return (reflectedTotalSupply, totalSupply);
+        if (innerTotalSupply < _innerTotalSupply.div(_totalSupply))
+            return (_innerTotalSupply, _totalSupply);
+        return (innerTotalSupply, totalSupply);
     }
 
-//    function reflect(uint256 tAmount) external {
-//        address sender = _msgSender();
-//        require(!_isExcluded[sender], "Excluded addresses cannot call this function");
-//        (uint256 rAmount, , , , , , ) = _getValues(tAmount);
-//        _reflectedBalances[sender] = _reflectedBalances[sender].sub(rAmount);
-//        _reflectTotal = _reflectTotal.sub(rAmount);
-//        _feeTotal = _feeTotal.add(tAmount);
-//    }
+    // TODO check if this is ever called (also exclude and include) on etherscan address from here
+    //https://perafinance.medium.com/safemoon-is-it-safe-though-a-detailed-explanation-of-frictionless-yield-bug-338710649846
+    // https://etherscan.io/tx/0xad155519128e701aded6b82bea62039d82d1eda5dd1ddb504c296696965b5a62
+     // reflect fn can be added with proxy - state in docs
 }
 

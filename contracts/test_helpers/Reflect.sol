@@ -9,7 +9,7 @@ contract Reflect is IERC20, Ownable {
     using SafeMath for uint256;
     using Address for address;
 
-    mapping (address => uint256) private _rOwned;
+    mapping (address => uint256) public _rOwned;
     mapping (address => uint256) private _tOwned;
     mapping (address => mapping (address => uint256)) private _allowances;
 
@@ -18,7 +18,7 @@ contract Reflect is IERC20, Ownable {
    
     uint256 private constant MAX = ~uint256(0);
     uint256 private constant _tTotal = 1 * 10**5 * 10**9;
-    uint256 private _rTotal = (MAX - (MAX % _tTotal));
+    uint256 public _rTotal = (MAX - (MAX % _tTotal));
     uint256 private _tFeeTotal;
 
     string private _name = 'reflect.finance';
