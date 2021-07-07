@@ -1,4 +1,4 @@
-const { ether, BN } = require('openzeppelin-test-helpers');
+const { BN } = require('openzeppelin-test-helpers');
 
 const SminemERC20 = artifacts.require('SminemERC20');
 
@@ -17,14 +17,23 @@ const SminemERC20 = artifacts.require('SminemERC20');
  * Здесь же нужно, чтобы при включении адреса мы получили следующий эффект: rate не изменился, у всех адресов те же балансы и
  * включенный адрес не получил на свой fragments баланс больше токенов (они вообще не изменились). -> 2.3.2.
  *
+ *   2.1. If can be excluded/included
  *   2.2. If exclusion maths (excluded amounts from supply) is correct:
+ *     2.2.1. Address 0
  *     2.2.2. When excluded over, less than the supply
  *     2.2.3. if excluded address has 0 balance
  *   2.3. If inclusion maths is correct:
+ *     2.3.1. Address 0
  *     2.3.2. Safe against bug, showed in the safemoon (check it on both reflect and sminem)
  *     2.3.3. Zero balance
+ *     2.3.4. Test without newly setting reflectedBalance to balance*rate (2.3.2)
  * 3. convertActualToReflected - not sure if the name states the idea. Test convertActualToReflected(super.balanceOf)
- * 5. reflectSupply < rate? getSupply values fn
+ * 4. Transfers without an exclusion - guarantee, that fees are going to be distributed
+ *   4.1. sending yourself
+ *   4.2. sending between 3-4 addresses.
+ * 5. reflectTotalSupply lower bound (https://github.com/reflectfinance/reflect-contracts/issues/10). Seems that mechanics should be off after some time.
+ * 6. reflectSupply < rate? getSupply values fn
+ * 7. Some ERC20 behaviour: approve, transferFrom and e.t.c.
  */
 
 // todo проверь заново логику тестов
@@ -559,11 +568,62 @@ contract('SminemToken', async function (accounts) {
             assertBalanceFeeDistribution(expectedBalanceOwner, balanceAfterOwner);
         })
 
-    })
+        it("Transfer excluded to himself", async() => {
+            // the same as charity distribution of 1% of transfer amount
+            let transferringAmount = toBNWithDecimals(1000);
+            let fee = transferringAmount.div(new BN(100));
 
-    // todo продолжи тесты:
-    // - сделай трансферы между выкл, от выкл и к выкл.
-    // - сделай выкл к самому себе (кажется, тоже самое, что и между эксклюдами)
+            let balanceBeforeAcc1 = await tokenInst.balanceOf(account1);
+            let balanceBeforeAcc2 = await tokenInst.balanceOf(account2);
+            let balanceBeforeAcc3 = await tokenInst.balanceOf(account3);
+            let balanceBeforeOwner = await tokenInst.balanceOf(owner);
+
+            // very important to be before distributions calculation
+            excludedAmount = excludedAmount.sub(fee);
+
+            let expectedBalanceAcc1 = balanceBeforeAcc1.sub(fee);
+            let expectedBalanceAcc2 = balanceBeforeAcc2;
+            let expectedBalanceAcc3 = newFeeDistributionWithExclusion(balanceBeforeAcc3, fee);
+            let expectedBalanceOwner = newFeeDistributionWithExclusion(balanceBeforeOwner, fee);
+
+            await tokenInst.transfer(account1, transferringAmount, {from: account1});
+
+            let balanceAfterAcc1 = await tokenInst.balanceOf(account1);
+            let balanceAfterAcc2 = await tokenInst.balanceOf(account2);
+            let balanceAfterAcc3 = await tokenInst.balanceOf(account3);
+            let balanceAfterOwner = await tokenInst.balanceOf(owner);
+
+            assert.equal(expectedBalanceAcc1.toString(), balanceAfterAcc1.toString());
+            assert.equal(expectedBalanceAcc2.toString(), balanceAfterAcc2.toString());
+            assertBalanceFeeDistribution(expectedBalanceAcc3, balanceAfterAcc3);
+            assertBalanceFeeDistribution(expectedBalanceOwner, balanceAfterOwner);
+        })
+
+        it("Including excluded accounts", async() => {
+            //https://perafinance.medium.com/safemoon-is-it-safe-though-a-detailed-explanation-of-frictionless-yield-bug-338710649846
+
+            let balanceBeforeAcc1 = await tokenInst.balanceOf(account1);
+            let balanceBeforeAcc2 = await tokenInst.balanceOf(account2);
+            let balanceBeforeAcc3 = await tokenInst.balanceOf(account3);
+            let balanceBeforeOwner = await tokenInst.balanceOf(owner);
+
+            await tokenInst.includeAccount(account1, {from: owner});
+            await tokenInst.includeAccount(account2, {from: owner});
+
+            excludedAmount = excludedAmount.sub(balanceBeforeAcc1.add(balanceBeforeAcc2));
+
+            let balanceAfterAcc1 = await tokenInst.balanceOf(account1);
+            let balanceAfterAcc2 = await tokenInst.balanceOf(account2);
+            let balanceAfterAcc3 = await tokenInst.balanceOf(account3);
+            let balanceAfterOwner = await tokenInst.balanceOf(owner);
+
+            assert.equal(balanceBeforeAcc1.toString(), balanceAfterAcc1.toString());
+            assert.equal(balanceBeforeAcc2.toString(), balanceAfterAcc2.toString());
+            assert.equal(balanceBeforeAcc3.toString(), balanceAfterAcc3.toString());
+            assert.equal(balanceBeforeOwner.toString(), balanceAfterOwner.toString());
+        })
+
+    })
 
     /*
 
