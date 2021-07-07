@@ -83,6 +83,7 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         // todo check for no errors in subtraction
         _excludedReflectedAmount = _excludedReflectedAmount.sub(newReflectedBalance);
 
+        // state in docs behaviour when _reflectedBalances[account] isn't changed
         _reflectedBalances[account] = newReflectedBalance;
         _balances[account] = 0;
         _isExcluded[account] = false;
