@@ -38,6 +38,9 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
     uint256 private _excludedAmount;
     uint256 private _excludedInnerAmount;
 
+    event AccountExcluded(address indexed account);
+    event AccountIncluded(address indexed account);
+
     // TODO waiting for constants from founders
     constructor(string memory name, string memory symbol, uint8 decimals, uint256 supply)
         ERC20Detailed(name, symbol, decimals)
@@ -68,6 +71,8 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
             _increaseExcludedValues(balance, innerBalance);
         }
         _isExcluded[account] = true;
+
+        emit AccountExcluded(account);
     }
 
     function includeAccount(address account) external onlyOwner {
@@ -83,6 +88,8 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         _innerBalances[account] = newInnerBalance;
         _balances[account] = 0;
         _isExcluded[account] = false;
+
+        emit AccountIncluded(account);
     }
 
     function getNumberOfTransfers() external view returns (uint256) {

@@ -23,7 +23,7 @@ npx truffle test --show-events --network development
 Make sure you have npx package installed globally.
 
 ## Dev notes:
-1. Имей в виду комментарии, которые были даны в Certik + https://pera.finance/info/PeraSmartContractAuditReport.pdf.
+1. Имей в виду комментарии, которые были даны в https://pera.finance/info/PeraSmartContractAuditReport.pdf.
 2. Посмотри, что делают проекты после деплоя. К примеру, они могут делать renounceOwnership и т.п. вещи делать. Посмотри на etherscan. 
 3. Выбери между комиссией 2% и burn.
 Есть сомнения по поводу bunr функции: надо проверить, что произойдет при exclude,
@@ -45,3 +45,4 @@ Make sure you have npx package installed globally.
 Другими словами можно просто отслеживать на какую величину мы должны делить и умножать reflectedBalance. Количество делений и умножений
 показывает количество реинициализаций rTotal.
 6.5. Реализация этого может отличаться.
+7. Такой же Баг фикс и для бага в функции расчета supply

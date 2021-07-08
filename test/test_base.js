@@ -37,7 +37,7 @@ const SminemERC20 = artifacts.require('SminemERC20');
  */
 
 // todo проверь заново логику тестов
-contract('SminemToken', async function (accounts) {
+contract('SminemERC20 token', async function (accounts) {
     // constructor params
     const name = "SminemERC20";
     const symbol = "SMNM";
@@ -614,6 +614,11 @@ contract('SminemToken', async function (accounts) {
             assertAfterFeeDistribution(expectedAcc1, balanceAfterAcc1);
             assertAfterFeeDistribution(expectedAcc2, balanceAfterAcc2);
             assertAfterFeeDistribution(expectedOwner, balanceAfterOwner);
+        })
+
+        it("Check amount of transfers", async() => {
+            let amountOfTransfer = await tokenInst.getNumberOfTransfers();
+            assert.equal(amountOfTransfer.toNumber(), 14);
         })
     })
 });
