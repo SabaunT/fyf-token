@@ -61,12 +61,11 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
 
         uint256 innerBalance = _innerBalances[account];
         if (innerBalance > 0) {
-            uint256 tokenBalance = _convertInnerToActual(innerBalance);
+            uint256 balance = _convertInnerToActual(innerBalance);
 
-            _balances[account] = tokenBalance;
+            _balances[account] = balance;
 
-            _excludedAmount = _excludedAmount.add(tokenBalance);
-            _excludedInnerAmount = _excludedInnerAmount.add(innerBalance);
+            _increaseExcludedValues(balance, innerBalance);
         }
         _isExcluded[account] = true;
     }
@@ -78,9 +77,7 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         uint256 balance = _balances[account];
         uint256 newInnerBalance = balance.mul(rate);
 
-        _excludedAmount = _excludedAmount.sub(balance);
-        // todo check for no errors in subtraction
-        _excludedInnerAmount = _excludedInnerAmount.sub(newInnerBalance);
+        _decreaseExcludedValues(balance, newInnerBalance);
 
         // todo state in docs behaviour when _reflectedBalances[account] isn't changed
         _innerBalances[account] = newInnerBalance;
@@ -116,6 +113,7 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         require(sender != address(0), "SminemERC20::transfer from the zero address");
         require(recipient != address(0), "SminemERC20::transfer to the zero address");
         require(amount > 0, "SminemERC20::transfer amount must be greater than zero");
+        // todo max tx amount, чтобы отслеживать китов
 
         TransferData memory td = _getTransferData(amount);
 
@@ -124,18 +122,14 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         
         if (!_isExcluded[sender] && _isExcluded[recipient]) {
             _balances[recipient] = _balances[recipient].add(td.cleanedAmount);
-            _excludedAmount = _excludedAmount.add(td.cleanedAmount);
-            _excludedInnerAmount = _excludedInnerAmount.add(td.innerCleanedAmount);
+            _increaseExcludedValues(td.cleanedAmount, td.innerCleanedAmount);
         } else if (_isExcluded[sender] && !_isExcluded[recipient]) {
             _balances[sender] = _balances[sender].sub(td.amount);
-            // TODO check no errors because of the sub
-            _excludedAmount = _excludedAmount.sub(td.amount);
-            _excludedInnerAmount = _excludedInnerAmount.sub(td.innerAmount);
+            _decreaseExcludedValues(td.amount, td.innerAmount);
         } else if (_isExcluded[sender] && _isExcluded[recipient]) {
             _balances[sender] = _balances[sender].sub(td.amount);
             _balances[recipient] = _balances[recipient].add(td.cleanedAmount);
-            _excludedAmount = _excludedAmount.sub(td.fee);
-            _excludedInnerAmount = _excludedInnerAmount.sub(td.innerFee);
+            _decreaseExcludedValues(td.fee, td.innerFee);
         }
 
         _reflectFee(td.innerFee, td.fee);
@@ -146,6 +140,17 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
     function _reflectFee(uint256 innerFee, uint256 outerFee) private {
         _innerTotalSupply = _innerTotalSupply.sub(innerFee);
         _feeDistributedTotal = _feeDistributedTotal.add(outerFee);
+    }
+
+    function _increaseExcludedValues(uint256 amount, uint256 innerAmount) private {
+        _excludedAmount = _excludedAmount.add(amount);
+        _excludedInnerAmount = _excludedInnerAmount.add(innerAmount);
+    }
+
+    function _decreaseExcludedValues(uint256 amount, uint256 innerAmount) private {
+        // TODO check no errors because of the sub
+        _excludedAmount = _excludedAmount.sub(amount);
+        _excludedInnerAmount = _excludedInnerAmount.sub(innerAmount);
     }
 
     function _convertInnerToActual(uint256 innerAmount) private view returns (uint256) {
@@ -202,13 +207,6 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         uint256 innerTotalSupply = _innerTotalSupply;
         uint256 totalSupply = _totalSupply;
 
-        /** todo
-         * Опасно тем, что рискуем попасть в неприятную ситуацию, когда
-         * вдруг резко увеличивается рэйт. Это произойдет, если большая часть тотал саплай
-         * рефлектед стал меньше excluded amount (например, было так много трансферов, что мы
-         * получили такой результат по итогу. Подумай и посчитай, может ли здесь помочь
-         * реинициализация.
-         */
         // todo the check `_excludedAmount > totalSupply` is needed only when burn happens
         if (_excludedInnerAmount > innerTotalSupply)
             return (innerTotalSupply, totalSupply);
@@ -217,6 +215,7 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         totalSupply = totalSupply.sub(_excludedAmount);
 
         if (innerTotalSupply < _innerTotalSupply.div(_totalSupply))
+        // todo why?
             return (_innerTotalSupply, _totalSupply);
         return (innerTotalSupply, totalSupply);
     }
