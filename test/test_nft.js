@@ -3,7 +3,7 @@ const SminemNFT = artifacts.require("SminemNFT");
 
 contract('SminemNFT token', async(accounts) => {
     const account1 = accounts[0];
-    const account2 = accounts[1];
+    const randomAddress = accounts[1];
     const account3 = accounts[2];
     const owner = accounts[3];
 
@@ -11,6 +11,9 @@ contract('SminemNFT token', async(accounts) => {
 
     let erc20Token;
     let nftToken;
+
+    const multiplicityOfTokenTransfers = 100;
+    const tokensMintedPerThreshold = 5; // todo test when really big
 
     let expectThrow = async (promise) => {
         try {
@@ -54,4 +57,54 @@ contract('SminemNFT token', async(accounts) => {
         let transferAmount = await erc20Token.getNumberOfTransfers();
         assert.equal(transferAmount.toNumber(), 5);
     })
+
+    it("Failing to set token address", async() => {
+        // invalid access
+        await expectThrow(
+            nftToken.setNewTokenAddress(randomAddress, {from: account1})
+        );
+        // zero address
+        await expectThrow(
+            nftToken.setNewTokenAddress(zeroAddress, {from: owner})
+        );
+        // same address
+        await expectThrow(
+            nftToken.setNewTokenAddress(erc20Token.address, {from: owner})
+        );
+    })
+
+    it("Failing to set multiplicity value", async() => {
+        // invalid access
+        await expectThrow(
+            nftToken.setTransfersMultiplicity(20, {from: account1})
+        );
+        // zero value
+        await expectThrow(
+            nftToken.setTransfersMultiplicity(0, {from: owner})
+        );
+    })
+
+    it("Failing to set minted per threshold value", async() => {
+        // invalid access
+        await expectThrow(
+            nftToken.setTokensMintedPerThreshold(20, {from: account1})
+        );
+        // zero value
+        await expectThrow(
+            nftToken.setTransfersMultiplicity(0, {from: owner})
+        );
+    })
+
+    it("Change multiplicity and minted per threshold amount", async() => {
+        await nftToken.setTransfersMultiplicity(multiplicityOfTokenTransfers, {from: owner});
+        await nftToken.setTokensMintedPerThreshold(tokensMintedPerThreshold, {from: owner});
+
+        let multiplicity = await nftToken.multiplicityOfTokenTransfers();
+        let mintingPerThreshold = await nftToken.mintingPerThreshold();
+
+        assert.equal(multiplicityOfTokenTransfers, multiplicity);
+        assert.equal(tokensMintedPerThreshold, mintingPerThreshold);
+    })
+
+
 })

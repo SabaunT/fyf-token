@@ -15,7 +15,7 @@ contract SminemNFT is ERC721Full, MinterRole, Ownable {
 
     string public baseUri;
 
-    uint256 public tokensMintedPerThreshold;
+    uint256 public mintingPerThreshold;
     uint256 public multiplicityOfTokenTransfers;
 
     event TokenAddress(IERC20TransferCounter indexed token);
@@ -46,7 +46,7 @@ contract SminemNFT is ERC721Full, MinterRole, Ownable {
         token = _token;
         multiplicityOfTokenTransfers = _transfersMultiplicity;
         baseUri = _baseUri;
-        tokensMintedPerThreshold = _mintedPerCall;
+        mintingPerThreshold = _mintedPerCall;
 
         emit TokenAddress(_token);
         emit TransferMultiplicity(_transfersMultiplicity);
@@ -79,13 +79,13 @@ contract SminemNFT is ERC721Full, MinterRole, Ownable {
         emit BaseUri(_baseUri);
     }
 
-    function setTokensMinterPerCallAmount(uint256 num) external onlyOwner {
+    function setTokensMintedPerThreshold(uint256 num) external onlyOwner {
         require(
             num > 0,
             "SminemNFT::nfts minted per transfers amount reaching threshold equals 0"
         );
 
-        tokensMintedPerThreshold = num;
+        mintingPerThreshold = num;
         emit TokensMintedPerCall(num);
     }
 
@@ -120,6 +120,6 @@ contract SminemNFT is ERC721Full, MinterRole, Ownable {
     function _getPossibleMints() private view returns (uint256) {
         uint256 maxMints = token.getNumberOfTransfers().div(multiplicityOfTokenTransfers);
         uint256 actualMints = totalSupply();
-        return tokensMintedPerThreshold.mul(maxMints.sub(actualMints));
+        return mintingPerThreshold.mul(maxMints.sub(actualMints));
     }
 }
