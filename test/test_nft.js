@@ -12,8 +12,8 @@ contract('SminemNFT token', async(accounts) => {
     let erc20Token;
     let nftToken;
 
-    const multiplicityOfTokenTransfers = 100;
-    const tokensMintedPerThreshold = 5; // todo test when really big
+    let multiplicityOfTokenTransfers = 100;
+    let tokensMintedPerThreshold = 5;
 
     let expectThrow = async (promise) => {
         try {
@@ -123,17 +123,33 @@ contract('SminemNFT token', async(accounts) => {
     })
 
     it("Successfully minting 5 (tokensMintedPerThreshold) NFTS", async() => {
-        let receivers = Array(5).fill(account1, 0, 3);
+        let possibleMintsBefore = await nftToken.getPossibleMintsAmount();
+        let receivers = Array(possibleMintsBefore.toNumber()).fill(account1, 0, 3);
         receivers.fill(account2, 3)
 
         // doesn't change the state
         let ids = await nftToken.mint.call(receivers, {from: owner});
         // changes the state
         await nftToken.mint(receivers, {from: owner});
-
-        let possibleMints = await nftToken.getPossibleMints();
+        
+        let possibleMints = await nftToken.getPossibleMintsAmount();
 
         assert.equal(ids.length, 5);
         assert.equal(possibleMints.toNumber(), 0);
     })
+
+    /**
+     * Вектора:
+     * 1. К минту доступно 5*100 (setTransfers, getPossbileMints);
+         * 1.2. Частичный минт всех 500
+         * 1.3. Частичный минт одной части, изменение кратности вниз
+         * 1.4. Частичный минт одной части, изменение кратности вверх
+         * 1.5. Частичнй минт одной части, изменение количество токенов за раз вниз
+         * 1.6. Частичный минт одной части, изменение количества токенов за раз вверх
+         * 1.7. Тот же самый тест, только изменяя и один параметр, и другой.
+     * 2 Отправка контрактам
+         * 2.1. Минт в пользу, у которого нет рисивера, должен не удасться (erc20 токену)
+         * 2.2. Задеплой такой же контракт и сминть ему - должно получиться
+     * 3. Когда оба множителя очень большие числа
+     * */
 })

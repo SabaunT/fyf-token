@@ -98,29 +98,34 @@ contract SminemNFT is ERC721Full, MinterRole, Ownable {
     *
     */
     function mint(address[] calldata receivers) external onlyMinter returns (uint256[] memory) {
-        // made for Loop length control
+        // The upper bound is set to 255 for a loop length control
         require(
             receivers.length <= 255,
             "SminemNFT::can't mint more than 255 tokens at once"
         );
-        require(receivers.length <= getPossibleMints(), "SminemNFT::excessive amount of token recipients");
+        require(
+            receivers.length <= getPossibleMintsAmount(),
+            "SminemNFT::excessive amount of token recipients"
+        );
 
         uint256[] memory mintedTokenIds = new uint256[](receivers.length);
         string memory _baseUri = baseUri;
         for (uint8 i = 0; i < receivers.length; i++) {
             uint256 newTokenId = totalSupply();
             string memory newTokenUri = string(abi.encodePacked(_baseUri, newTokenId.toString()));
+
             _safeMint(receivers[i], newTokenId);
             _setTokenURI(newTokenId, newTokenUri);
+
             mintedTokenIds[i] = newTokenId;
         }
         return mintedTokenIds;
     }
 
-    function getPossibleMints() public view returns (uint256) {
-        uint256 maxMints = token.getNumberOfTransfers().div(multiplicityOfTokenTransfers);
+    function getPossibleMintsAmount() public view returns (uint256) {
+        uint256 possibleTimesToMint = token.getNumberOfTransfers().div(multiplicityOfTokenTransfers);
         uint256 actualMints = totalSupply();
-        return (mintingPerThreshold.mul(maxMints)).sub(actualMints);
+        return (mintingPerThreshold.mul(possibleTimesToMint)).sub(actualMints);
     }
 
     // ERC721Enumerable doesn't have safeMint implementation
