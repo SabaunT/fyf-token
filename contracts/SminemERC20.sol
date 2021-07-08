@@ -209,7 +209,8 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
          * получили такой результат по итогу. Подумай и посчитай, может ли здесь помочь
          * реинициализация.
          */
-        if (_excludedAmount > totalSupply || _excludedInnerAmount > innerTotalSupply)
+        // todo the check `_excludedAmount > totalSupply` is needed only when burn happens
+        if (_excludedInnerAmount > innerTotalSupply)
             return (innerTotalSupply, totalSupply);
 
         innerTotalSupply = innerTotalSupply.sub(_excludedInnerAmount);
@@ -223,6 +224,6 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
     // TODO check if this is ever called (also exclude and include) on etherscan address from here
     //https://perafinance.medium.com/safemoon-is-it-safe-though-a-detailed-explanation-of-frictionless-yield-bug-338710649846
     // https://etherscan.io/tx/0xad155519128e701aded6b82bea62039d82d1eda5dd1ddb504c296696965b5a62
-     // reflect fn can be added with proxy - state in docs
+    // reflect fn can be added with proxy - state in docs
 }
 
