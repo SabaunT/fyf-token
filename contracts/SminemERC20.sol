@@ -79,7 +79,7 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
 
         _decreaseExcludedValues(balance, newInnerBalance);
 
-        // todo state in docs behaviour when _reflectedBalances[account] isn't changed
+        // [DOCS] state in docs behaviour when _reflectedBalances[account] isn't changed
         _innerBalances[account] = newInnerBalance;
         _balances[account] = 0;
         _isExcluded[account] = false;
@@ -113,7 +113,6 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         require(sender != address(0), "SminemERC20::transfer from the zero address");
         require(recipient != address(0), "SminemERC20::transfer to the zero address");
         require(amount > 0, "SminemERC20::transfer amount must be greater than zero");
-        // todo max tx amount, чтобы отслеживать китов
 
         TransferData memory td = _getTransferData(amount);
 
@@ -148,17 +147,11 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
     }
 
     function _decreaseExcludedValues(uint256 amount, uint256 innerAmount) private {
-        // TODO check no errors because of the sub
         _excludedAmount = _excludedAmount.sub(amount);
         _excludedInnerAmount = _excludedInnerAmount.sub(innerAmount);
     }
 
     function _convertInnerToActual(uint256 innerAmount) private view returns (uint256) {
-        // todo ever possible?
-        require(
-            innerAmount <= _innerTotalSupply,
-            "SminemERC20::inner amount must be less than inner total supply"
-        );
         uint256 rate = _getCurrentReflectionRate();
         return innerAmount.div(rate);
     }
@@ -207,20 +200,20 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         uint256 innerTotalSupply = _innerTotalSupply;
         uint256 totalSupply = _totalSupply;
 
-        // todo the check `_excludedAmount > totalSupply` is needed only when burn happens
+        // [INFO]: The check `_excludedAmount > totalSupply` is needed only when burn happens
         if (_excludedInnerAmount > innerTotalSupply)
             return (innerTotalSupply, totalSupply);
 
         innerTotalSupply = innerTotalSupply.sub(_excludedInnerAmount);
         totalSupply = totalSupply.sub(_excludedAmount);
 
+        // todo случай ясен, мы просто очень много вычленили из tS (приведи расчеты). что с этим делать? правильно ли сейчашнее решение
         if (innerTotalSupply < _innerTotalSupply.div(_totalSupply))
-        // todo why?
             return (_innerTotalSupply, _totalSupply);
         return (innerTotalSupply, totalSupply);
     }
 
-    // TODO check if this is ever called (also exclude and include) on etherscan address from here
+    // [DOCS] check if this is ever called (also exclude and include) on etherscan address from here
     //https://perafinance.medium.com/safemoon-is-it-safe-though-a-detailed-explanation-of-frictionless-yield-bug-338710649846
     // https://etherscan.io/tx/0xad155519128e701aded6b82bea62039d82d1eda5dd1ddb504c296696965b5a62
     // reflect fn can be added with proxy - state in docs
