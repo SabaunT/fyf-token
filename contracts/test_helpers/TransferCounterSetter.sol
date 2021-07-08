@@ -6,7 +6,7 @@ contract TransferCounterSetter is SminemERC20 {
 
     constructor() public SminemERC20("Test", "TST", 9, 100000) {}
 
-    function setTxAmount(uint256 value) external {
+    function setTransferAmount(uint256 value) external {
         // this is done for the test sake, should never be done in production
         _transferCounter._value = value;
     }

@@ -50,6 +50,8 @@ contract('SminemNFT token', async(accounts) => {
     })
 
     it("Setting transfer amount in ERC20", async() => {
-        
+        await erc20Token.setTransferAmount(5);
+        let transferAmount = await erc20Token.getNumberOfTransfers();
+        assert.equal(transferAmount.toNumber(), 5);
     })
 })
