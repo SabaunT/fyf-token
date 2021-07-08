@@ -132,10 +132,6 @@ contract('SminemNFT token', async(accounts) => {
         await nftToken.mint(receivers, {from: owner});
 
         let possibleMints = await nftToken.getPossibleMints();
-        let a = await nftToken.ownerOf(0);
-        let b = await nftToken.ownerOf(3);
-
-        console.log(a.toString(), b.toString())
 
         assert.equal(ids.length, 5);
         assert.equal(possibleMints.toNumber(), 0);
