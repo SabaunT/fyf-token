@@ -93,33 +93,41 @@ contract SminemNFT is ERC721Full, MinterRole, Ownable {
     * Every time transfers on `token` is multiple of `multiplicityOfTokenTransfers`,
     * you can mint `tokensMintedPerThreshold`.
     *
-    * For example, we totally X NFTs were minted. Transfers on `token` reached amount of Y.
-    * So you can mint: `tokensMintedPerThreshold` * ( (Y-X)//`multiplicityOfTokenTransfers` )
+    * For example, totally X amount of NFTs were minted. Transfers on `token` reached amount of Y.
+    * So you can mint: `tokensMintedPerThreshold` * (Y//`multiplicityOfTokenTransfers`) - X.
     *
     */
-    function mint(address[] calldata to) external onlyMinter returns (uint256[] memory) {
+    function mint(address[] calldata receivers) external onlyMinter returns (uint256[] memory) {
         // made for Loop length control
         require(
-            to.length <= 255,
+            receivers.length <= 255,
             "SminemNFT::can't mint more than 255 tokens at once"
         );
-        require(to.length <= _getPossibleMints(), "SminemNFT::excessive amount of token recipients");
+        require(receivers.length <= getPossibleMints(), "SminemNFT::excessive amount of token recipients");
 
-        uint256[] memory mintedTokenIds = new uint256[](to.length);
+        uint256[] memory mintedTokenIds = new uint256[](receivers.length);
         string memory _baseUri = baseUri;
-        for (uint8 i = 0; i < to.length; i++) {
+        for (uint8 i = 0; i < receivers.length; i++) {
             uint256 newTokenId = totalSupply();
             string memory newTokenUri = string(abi.encodePacked(_baseUri, newTokenId.toString()));
-            _safeMint(to[i], newTokenId);
+            _safeMint(receivers[i], newTokenId);
             _setTokenURI(newTokenId, newTokenUri);
             mintedTokenIds[i] = newTokenId;
         }
         return mintedTokenIds;
     }
 
-    function _getPossibleMints() private view returns (uint256) {
+    function getPossibleMints() public view returns (uint256) {
         uint256 maxMints = token.getNumberOfTransfers().div(multiplicityOfTokenTransfers);
         uint256 actualMints = totalSupply();
-        return mintingPerThreshold.mul(maxMints.sub(actualMints));
+        return (mintingPerThreshold.mul(maxMints)).sub(actualMints);
+    }
+
+    // ERC721Enumerable doesn't have safeMint implementation
+    function _safeMint(address to, uint256 tokenId) internal {
+        ERC721Enumerable._mint(to, tokenId);
+        require(
+            _checkOnERC721Received(address(0), to, tokenId, ""),
+            "SminemNFT::transfer to non ERC721Receiver implementer");
     }
 }

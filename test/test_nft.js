@@ -3,8 +3,8 @@ const SminemNFT = artifacts.require("SminemNFT");
 
 contract('SminemNFT token', async(accounts) => {
     const account1 = accounts[0];
-    const randomAddress = accounts[1];
-    const account3 = accounts[2];
+    const account2 = accounts[1];
+    const randomAddress = accounts[2];
     const owner = accounts[3];
 
     const zeroAddress = "0x0000000000000000000000000000000000000000";
@@ -53,9 +53,9 @@ contract('SminemNFT token', async(accounts) => {
     })
 
     it("Setting transfer amount in ERC20", async() => {
-        await erc20Token.setTransferAmount(5);
+        await erc20Token.setTransferAmount(120);
         let transferAmount = await erc20Token.getNumberOfTransfers();
-        assert.equal(transferAmount.toNumber(), 5);
+        assert.equal(transferAmount.toNumber(), 120);
     })
 
     it("Failing to set token address", async() => {
@@ -106,5 +106,38 @@ contract('SminemNFT token', async(accounts) => {
         assert.equal(tokensMintedPerThreshold, mintingPerThreshold);
     })
 
+    it("Failing to mint", async() => {
+        let addressesMock = Array(256).fill(randomAddress);
+        // invalid access
+        await expectThrow(
+            nftToken.mint(addressesMock.slice(0, 254), {from: account1})
+        );
+        // too much at once
+        await expectThrow(
+            nftToken.mint(addressesMock, {from: owner})
+        );
+        // more than available mints
+        await expectThrow(
+            nftToken.mint(addressesMock.slice(0, 254), {from: owner})
+        );
+    })
 
+    it("Successfully minting 5 (tokensMintedPerThreshold) NFTS", async() => {
+        let receivers = Array(5).fill(account1, 0, 3);
+        receivers.fill(account2, 3)
+
+        // doesn't change the state
+        let ids = await nftToken.mint.call(receivers, {from: owner});
+        // changes the state
+        await nftToken.mint(receivers, {from: owner});
+
+        let possibleMints = await nftToken.getPossibleMints();
+        let a = await nftToken.ownerOf(0);
+        let b = await nftToken.ownerOf(3);
+
+        console.log(a.toString(), b.toString())
+
+        assert.equal(ids.length, 5);
+        assert.equal(possibleMints.toNumber(), 0);
+    })
 })
