@@ -98,9 +98,9 @@ contract SminemNFT is ERC721Full, MinterRole, Ownable {
     *
     */
     function mint(address[] calldata receivers) external onlyMinter returns (uint256[] memory) {
-        // The upper bound is set to 255 for a loop length control
+        // The upper bound is set to 30, which is < 5'000'000 gas.
         require(
-            receivers.length <= 255,
+            receivers.length <= 30,
             "SminemNFT::can't mint more than 255 tokens at once"
         );
         require(
@@ -125,6 +125,7 @@ contract SminemNFT is ERC721Full, MinterRole, Ownable {
     function getPossibleMintsAmount() public view returns (uint256) {
         uint256 possibleTimesToMint = token.getNumberOfTransfers().div(multiplicityOfTokenTransfers);
         uint256 actualMints = totalSupply();
+        // todo кратность сильно повысив вверх можно улететь в ошибку, когда уменьшаемое меньше вычитаемого
         return (mintingPerThreshold.mul(possibleTimesToMint)).sub(actualMints);
     }
 
