@@ -125,7 +125,10 @@ contract SminemNFT is ERC721Full, MinterRole, Ownable {
     function getPossibleMintsAmount() public view returns (uint256) {
         uint256 possibleTimesToMint = token.getNumberOfTransfers().div(multiplicityOfTokenTransfers);
         uint256 actualMints = totalSupply();
-        // todo кратность сильно повысив вверх можно улететь в ошибку, когда уменьшаемое меньше вычитаемого
+        // Could happen when `mintingPerThreshold` decreases too much, or
+        // when `multiplicityOfTokenTransfers` increases too much
+        if (mintingPerThreshold.mul(possibleTimesToMint) < actualMints)
+            return 0;
         return (mintingPerThreshold.mul(possibleTimesToMint)).sub(actualMints);
     }
 
