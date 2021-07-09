@@ -62,6 +62,15 @@ contract SminemNFT is ERC721Full, MinterRole, Ownable {
         emit TokenAddress(_token);
     }
 
+    // todo set new
+    function setBaseUri(string calldata _baseUri) external onlyOwner {
+        require(bytes(_baseUri).length > 0, "SminemNFT::empty base uri string");
+
+        baseUri = _baseUri;
+        emit BaseUri(_baseUri);
+    }
+
+    // todo set new
     function setTransfersMultiplicity(uint256 num) external onlyOwner {
         require(
             num > 0,
@@ -72,13 +81,7 @@ contract SminemNFT is ERC721Full, MinterRole, Ownable {
         emit TransferMultiplicity(num);
     }
 
-    function setTransfersMultiplicity(string calldata _baseUri) external onlyOwner {
-        require(bytes(_baseUri).length > 0, "SminemNFT::empty base uri string");
-
-        baseUri = _baseUri;
-        emit BaseUri(_baseUri);
-    }
-
+    // todo set new
     function setTokensMintedPerThreshold(uint256 num) external onlyOwner {
         require(
             num > 0,
@@ -122,7 +125,13 @@ contract SminemNFT is ERC721Full, MinterRole, Ownable {
         return mintedTokenIds;
     }
 
+    // todo при изменении, которое делает невалидной ситуацию с минтом есть пути:
+    // 1) ничего не делать
+    // 2) оставшиеся токены запиши на счет (pending), уменьши  getNumberOfTransfers на величину
+    // до изменения. (Это в случае увеличения mintingPerThreshold)
+    // 3) .. 
     function getPossibleMintsAmount() public view returns (uint256) {
+        // todo zero rounding (63*100/5 and 1260//100 * 5)
         uint256 possibleTimesToMint = token.getNumberOfTransfers().div(multiplicityOfTokenTransfers);
         uint256 actualMints = totalSupply();
         // Could happen when `mintingPerThreshold` decreases too much, or
