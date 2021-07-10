@@ -146,7 +146,7 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
             _decreaseExcludedValues(td.fee, td.innerFee);
         }
 
-        if (!_isFeeChopperOn)
+        if (canTakeNDistributeFees())
             _reflectFee(td.innerFee, td.fee);
         _transferCounter.increment();
         emit Transfer(sender, recipient, td.receivingAmount);
@@ -168,11 +168,10 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         uint256 newExcludedInnerAmount = _excludedInnerAmount.add(innerAmount);
         // Original check from here https://github.com/reflectfinance/reflect-contracts/blob/6a92595bb0ff405c67a6d285d4c064b7f7276e15/contracts/REFLECT.sol#L244,
         // but instead we return last "valid" rate.
-        if (!_isFeeChopperOn &&
+        if (canTakeNDistributeFees() &&
             _innerTotalSupply.sub(newExcludedInnerAmount) < _innerTotalSupply.div(_totalSupply)
         ) {
-            _lastRateBeforeChopperIsOn = _getCurrentReflectionRate();
-            _isFeeChopperOn = true;
+            stopFees();
         }
         _excludedAmount = _excludedAmount.add(amount);
         _excludedInnerAmount = newExcludedInnerAmount;
@@ -181,15 +180,35 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
     function _decreaseExcludedValues(uint256 amount, uint256 innerAmount) private {
         // !
         uint256 newExcludedInnerAmount = _excludedInnerAmount.sub(innerAmount);
-        if (_innerTotalSupply > newExcludedInnerAmount &&
-            _innerTotalSupply.sub(newExcludedInnerAmount) > _innerTotalSupply.div(_totalSupply) &&
-            _isFeeChopperOn
+        if (cannotTakeNDistributeFees() &&
+            _innerTotalSupply > newExcludedInnerAmount &&
+            _innerTotalSupply.sub(newExcludedInnerAmount) > _innerTotalSupply.div(_totalSupply)
         ) {
-            _isFeeChopperOn = false;
+            enableFees();
         }
         _excludedAmount = _excludedAmount.sub(amount);
         _excludedInnerAmount = newExcludedInnerAmount;
     }
+
+    function stopFees() private {
+        _lastRateBeforeChopperIsOn = _getCurrentReflectionRate();
+        _isFeeChopperOn = true;
+    }
+
+    function enableFees() private {
+        _isFeeChopperOn = false;
+    }
+
+    // Just to make code more readable
+    function cannotTakeNDistributeFees() private view returns (bool) {
+        return _isFeeChopperOn;
+    }
+
+    // Just to make code more readable
+    function canTakeNDistributeFees() private view returns (bool) {
+        return !_isFeeChopperOn;
+    }
+
 
     function _convertInnerToOuter(uint256 innerAmount) private view returns (uint256) {
         uint256 rate = _getCurrentReflectionRate();
@@ -214,9 +233,8 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
     }
 
     function _getTransferDataFromExternalValues(uint256 amount) private view returns (uint256, uint256) {
-        // !
         uint256 fee = 0;
-        if (!_isFeeChopperOn)
+        if (cannotTakeNDistributeFees())
             fee = amount.mul(_feePercent).div(100);
         uint256 receivingAmount = amount.sub(fee);
         return (receivingAmount, fee);
