@@ -37,6 +37,9 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
     uint256 private _innerTotalSupply;
     uint256 private _excludedAmount;
     uint256 private _excludedInnerAmount;
+    uint256 private _lastRateBeforeChopperIsOn;
+
+    bool private _isFeeChopperOn;
 
     event AccountExcluded(address indexed account);
     event AccountIncluded(address indexed account);
@@ -138,7 +141,8 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
             _decreaseExcludedValues(td.fee, td.innerFee);
         }
 
-        _reflectFee(td.innerFee, td.fee);
+        if (!_isFeeChopperOn)
+            _reflectFee(td.innerFee, td.fee);
         _transferCounter.increment();
         emit Transfer(sender, recipient, td.cleanedAmount);
     }
@@ -149,13 +153,30 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
     }
 
     function _increaseExcludedValues(uint256 amount, uint256 innerAmount) private {
+        uint256 newExcludedInnerAmount = _excludedInnerAmount.add(innerAmount);
+        // [INFO]: The check `_excludedAmount > totalSupply` is needed only when burn happens
+        if ((_innerTotalSupply < newExcludedInnerAmount ||
+            _innerTotalSupply.sub(newExcludedInnerAmount) < _innerTotalSupply.div(_totalSupply) &&
+            !_isFeeChopperOn
+            )
+        ) {
+            _lastRateBeforeChopperIsOn = _getCurrentReflectionRate();
+            _isFeeChopperOn = true;
+        }
         _excludedAmount = _excludedAmount.add(amount);
-        _excludedInnerAmount = _excludedInnerAmount.add(innerAmount);
+        _excludedInnerAmount = newExcludedInnerAmount;
     }
 
     function _decreaseExcludedValues(uint256 amount, uint256 innerAmount) private {
+        uint256 newExcludedInnerAmount = _excludedInnerAmount.sub(innerAmount);
+        if (_innerTotalSupply > newExcludedInnerAmount &&
+            _innerTotalSupply.sub(newExcludedInnerAmount) > _innerTotalSupply.div(_totalSupply) &&
+            _isFeeChopperOn
+        ) {
+            _isFeeChopperOn = false;
+        }
         _excludedAmount = _excludedAmount.sub(amount);
-        _excludedInnerAmount = _excludedInnerAmount.sub(innerAmount);
+        _excludedInnerAmount = newExcludedInnerAmount;
     }
 
     function _convertInnerToActual(uint256 innerAmount) private view returns (uint256) {
@@ -199,25 +220,11 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
     }
 
     function _getCurrentReflectionRate() private view returns (uint256) {
-        (uint256 reflectedTotalSupply, uint256 totalSupply) = _getCurrentSupplyValues();
-        return reflectedTotalSupply.div(totalSupply);
-    }
-
-    function _getCurrentSupplyValues() private view returns (uint256, uint256) {
-        uint256 innerTotalSupply = _innerTotalSupply;
-        uint256 totalSupply = _totalSupply;
-
-        // [INFO]: The check `_excludedAmount > totalSupply` is needed only when burn happens
-        if (_excludedInnerAmount > innerTotalSupply)
-            return (innerTotalSupply, totalSupply);
-
-        innerTotalSupply = innerTotalSupply.sub(_excludedInnerAmount);
-        totalSupply = totalSupply.sub(_excludedAmount);
-
-        // todo случай ясен, мы просто очень много вычленили из tS (приведи расчеты). что с этим делать? правильно ли сейчашнее решение
-        if (innerTotalSupply < _innerTotalSupply.div(_totalSupply))
-            return (_innerTotalSupply, _totalSupply);
-        return (innerTotalSupply, totalSupply);
+        if (_isFeeChopperOn)
+            return _lastRateBeforeChopperIsOn;
+        uint256 innerTotalSupply = _innerTotalSupply.sub(_excludedInnerAmount);
+        uint256 totalSupply = _totalSupply.sub(_excludedAmount);
+        return innerTotalSupply.div(totalSupply);
     }
 
     // [DOCS] check if this is ever called (also exclude and include) on etherscan address from here
