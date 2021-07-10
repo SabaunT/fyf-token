@@ -76,6 +76,9 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
 
             _balances[account] = balance;
 
+            if (_feeChopperIsOff() && _mustNotTakeNDistributeFees(innerBalance)) {
+                _stopFees();
+            }
             _increaseExcludedValues(balance, innerBalance);
         }
         _isExcluded[account] = true;
@@ -90,6 +93,9 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         uint256 balance = _balances[account];
         uint256 newInnerBalance = balance.mul(rate);
 
+        if (_feeChopperIsOn() && _mustTakeNDistributeFees(newInnerBalance)) {
+            _enableFees();
+        }
         _decreaseExcludedValues(balance, newInnerBalance);
 
         // [DOCS] state in docs behaviour when _reflectedBalances[account] isn't changed
@@ -170,7 +176,7 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         private
         returns (uint256, uint256, uint256)
     {
-        bool mustNotTakeFee = checkMustNotTakeNDistributeFees(td.receivingInnerAmount);
+        bool mustNotTakeFee = _mustNotTakeNDistributeFees(td.receivingInnerAmount);
         if (mustNotTakeFee) {
             td.receivingAmount = td.sendingAmount;
             td.receivingInnerAmount = td.sendingInnerAmount;
@@ -192,7 +198,7 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         returns (uint256, uint256, uint256)
     {
         if (_feeChopperIsOn()) {
-            if (checkMustTakeNDistributeFees(td.sendingInnerAmount)) {
+            if (_mustTakeNDistributeFees(td.sendingInnerAmount)) {
                 _enableFees();
             } else {
                 td.receivingAmount = td.sendingAmount;
@@ -215,7 +221,7 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         returns (uint256, uint256, uint256)
     {
         if (_feeChopperIsOn()) {
-            if (checkMustTakeNDistributeFees(td.innerFee)) {
+            if (_mustTakeNDistributeFees(td.innerFee)) {
                 _enableFees();
             } else {
                 td.receivingAmount = td.sendingAmount;
@@ -265,14 +271,14 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         }
     }
 
-    function checkMustNotTakeNDistributeFees(uint256 innerAmount) private view returns (bool) {
+    function _mustNotTakeNDistributeFees(uint256 innerAmount) private view returns (bool) {
         // Original check from here https://github.com/reflectfinance/reflect-contracts/blob/6a92595bb0ff405c67a6d285d4c064b7f7276e15/contracts/REFLECT.sol#L244,
         // but instead we return last "valid" rate.
         uint256 newExcludedInnerAmount = _excludedInnerAmount.add(innerAmount);
         return _innerTotalSupply.sub(newExcludedInnerAmount) < _innerTotalSupply.div(_totalSupply);
     }
 
-    function checkMustTakeNDistributeFees(uint256 innerAmount) private view returns (bool) {
+    function _mustTakeNDistributeFees(uint256 innerAmount) private view returns (bool) {
         uint256 newExcludedInnerAmount = _excludedInnerAmount.sub(innerAmount);
         return _innerTotalSupply > newExcludedInnerAmount &&
         _innerTotalSupply.sub(newExcludedInnerAmount) > _innerTotalSupply.div(_totalSupply);
