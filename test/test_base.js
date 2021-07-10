@@ -2,41 +2,6 @@ const { BN } = require('openzeppelin-test-helpers');
 
 const SminemERC20 = artifacts.require('SminemERC20');
 
-/**
- * Tests for:
- * 1. balanceOf(excluded and included accounts)
- * 2. Exclusion and inclusion + transfers
- * Самое главное, чтобы при вкл./выкл. адреса, дальнейших трансферах (их отсутствия),
- * балансы всех остальных не поменялись. Распиши явный пример на листочке. Более подробно, читай ниже.
- *
- * Выключение адреса лишает его участия в образовании rate (и получении комиссий в момент перехода из gons во fragments),
- * однако не лишает возможности отправлять и получать средства. Чтобы не хранить и не рассчитывать rate, по которому
- * из gons можно будет получить fragments без комиссии для каждого исключенного, мы просто для них теперь используем
- * стандартный mapping balances, а также соотв способ расчета их баланса (просто обращаемся к тому mapping).
- * Поэтому проверь, каков rate между текущим балансом gons, а также текущим rate в системе (и тем rate, когда он был исключен).
- * Здесь же нужно, чтобы при включении адреса мы получили следующий эффект: rate не изменился, у всех адресов те же балансы и
- * включенный адрес не получил на свой fragments баланс больше токенов (они вообще не изменились). -> 2.3.2.
- *
- *   2.1. If can be excluded/included (done)
- *   2.2. If exclusion maths (excluded amounts from supply) is correct:
- *     2.2.1. Address 0 (done)
- *     2.2.2. When excluded over, less than the supply
- *     2.2.3. if excluded address has 0 balance (done)
- *   2.3. If inclusion maths is correct:
- *     2.3.1. Address 0 (done)
- *     2.3.2. Safe against bug, showed in the safemoon (check it on both reflect and sminem) (done)
- *     2.3.3. Zero balance (done)
- *     2.3.4. Test without newly setting reflectedBalance to balance*rate (2.3.2) (done)
- * 4. Transfers without an exclusion - guarantee, that fees are going to be distributed
- *   4.1. sending yourself (done)
- *   4.2. sending between 3-4 addresses. (done)
- * 5. reflectTotalSupply lower bound (https://github.com/reflectfinance/reflect-contracts/issues/10).
- * Seems that mechanics should be off after some time. (acknowledged, stated in docs)
- * 6. reflectSupply < rate? getSupply values fn
- * 7. Some ERC20 behaviour: approve, transferFrom and e.t.c. (done)
- */
-
-// todo проверь заново логику тестов
 contract('SminemERC20 token', async function (accounts) {
     // constructor params
     const name = "SminemERC20";
@@ -180,7 +145,6 @@ contract('SminemERC20 token', async function (accounts) {
         let transferringAmount = toBNWithDecimals(5000);
         let expectedBalances = await getExpectedBalancesAfterTransfer(owner, account2, transferringAmount);
 
-        // todo dirty
         let balanceAcc1Before = await tokenInst.balanceOf(account1);
         let expectedAcc1 = distributeFees(balanceAcc1Before, transferringAmount.div(new BN(100)));
 
@@ -209,7 +173,6 @@ contract('SminemERC20 token', async function (accounts) {
         let expectedBalances = await getExpectedBalancesAfterTransfer(account1, account3, transferringAmount);
 
         // check other balances for token distribution
-        // todo dirty
         let balanceAcc2Before = await tokenInst.balanceOf(account2);
         let balanceOwnerBefore = await tokenInst.balanceOf(owner);
 
@@ -366,7 +329,6 @@ contract('SminemERC20 token', async function (accounts) {
             let expectedBalances = await getExpectedBalancesAfterTransfer(account3, account1, transferringAmount);
 
             // check other balances for token distribution
-            // todo dirty
             let balanceBeforeAcc2 = await tokenInst.balanceOf(account2);
             let balanceBeforeOwner = await tokenInst.balanceOf(owner);
             let expectedAcc2 = distributeFees(balanceBeforeAcc2, fee);
@@ -555,7 +517,6 @@ contract('SminemERC20 token', async function (accounts) {
             let expectedBalances = await getExpectedBalancesAfterTransfer(owner, account1, transferringAmount);
 
             // check other balances for token distribution
-            // todo dirty
             let balanceBeforeExcluded = await tokenInst.balanceOf(zeroBalanceAccount);
             let balanceBeforeAcc2 = await tokenInst.balanceOf(account2);
             let balanceBeforeAcc3 = await tokenInst.balanceOf(account3);
