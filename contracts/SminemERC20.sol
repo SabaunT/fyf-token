@@ -190,25 +190,6 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         _excludedInnerAmount = newExcludedInnerAmount;
     }
 
-    function _stopFees() private {
-        _lastRateBeforeChopperIsOn = _getCurrentReflectionRate();
-        _isFeeChopperOn = true;
-    }
-
-    function _enableFees() private {
-        _isFeeChopperOn = false;
-    }
-
-    // Just to make code more readable
-    function _cannotTakeNDistributeFees() private view returns (bool) {
-        return _isFeeChopperOn;
-    }
-
-    // Just to make code more readable
-    function _canTakeNDistributeFees() private view returns (bool) {
-        return !_isFeeChopperOn;
-    }
-
     function _convertInnerToOuter(uint256 innerAmount) private view returns (uint256) {
         uint256 rate = _getCurrentReflectionRate();
         return innerAmount.div(rate);
@@ -249,6 +230,25 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         uint256 innerFee = fee.mul(rate);
         uint256 innerReceivingAmount = innerSendingAmount.sub(innerFee);
         return (innerSendingAmount, innerReceivingAmount, innerFee);
+    }
+
+    function _stopFees() private {
+        _lastRateBeforeChopperIsOn = _getCurrentReflectionRate();
+        _isFeeChopperOn = true;
+    }
+
+    function _enableFees() private {
+        _isFeeChopperOn = false;
+    }
+
+    // Just to make code more readable
+    function _cannotTakeNDistributeFees() private view returns (bool) {
+        return _isFeeChopperOn;
+    }
+
+    // Just to make code more readable
+    function _canTakeNDistributeFees() private view returns (bool) {
+        return !_isFeeChopperOn;
     }
 
     function _getCurrentReflectionRate() private view returns (uint256) {
