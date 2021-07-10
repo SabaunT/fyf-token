@@ -76,8 +76,8 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
 
             _balances[account] = balance;
 
-            if (_feeChopperIsOff() && _mustNotTakeNDistributeFees(innerBalance)) {
-                _stopFees();
+            if (_isFeeChopperOff() && _checkMustNotTakeNDistributeFees(innerBalance)) {
+                _enableFeeChopper();
             }
             _increaseExcludedValues(balance, innerBalance);
         }
@@ -93,8 +93,8 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         uint256 balance = _balances[account];
         uint256 newInnerBalance = balance.mul(rate);
 
-        if (_feeChopperIsOn() && _mustTakeNDistributeFees(newInnerBalance)) {
-            _enableFees();
+        if (_isFeeChopperOn && _checkMustTakeNDistributeFees(newInnerBalance)) {
+            _disableFeeChopper();
         }
         _decreaseExcludedValues(balance, newInnerBalance);
 
@@ -138,7 +138,7 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         TransferData memory td = _getTransferData(amount);
 
         (uint256 receivingAmount, uint256 fee, uint256 innerFee) = (0, 0, 0);
-        
+
         if (!_isExcluded[sender] && _isExcluded[receiver]) {
             (receivingAmount, fee, innerFee) = _transferToExcluded(sender, receiver, td);
         } else if (_isExcluded[sender] && !_isExcluded[receiver]) {
@@ -148,10 +148,7 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         } else
             (receivingAmount, fee, innerFee) = _transferStandard(sender, receiver, td);
 
-        // if value `_canTakeNDistributeFees` changes from false to true, because of
-        // call to `_increaseExcludedValues`, fee values (inner and outer) will be 0.
-        // That is because when `_transfer` was called, fees were off.
-        if (_feeChopperIsOff() && innerFee != 0)
+        if (_isFeeChopperOff())
             _reflectFee(innerFee, fee);
         _transferCounter.increment();
         emit Transfer(sender, receiver, receivingAmount);
@@ -161,10 +158,8 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         private
         returns (uint256, uint256, uint256)
     {
-        if (_feeChopperIsOn()) {
+        if (_isFeeChopperOn) {
             td.receivingInnerAmount = td.sendingInnerAmount;
-            td.fee = 0;
-            td.innerFee = 0;
         }
         _innerBalances[sender] = _innerBalances[sender].sub(td.sendingInnerAmount);
         _innerBalances[receiver] = _innerBalances[receiver].add(td.receivingInnerAmount);
@@ -176,14 +171,14 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         private
         returns (uint256, uint256, uint256)
     {
-        bool mustNotTakeFee = _mustNotTakeNDistributeFees(td.receivingInnerAmount);
-        if (mustNotTakeFee) {
+        if (_isFeeChopperOn || _checkMustNotTakeNDistributeFees(td.receivingInnerAmount)) {
             td.receivingAmount = td.sendingAmount;
             td.receivingInnerAmount = td.sendingInnerAmount;
             td.fee = 0;
             td.innerFee = 0;
-            if (_feeChopperIsOff()) _stopFees();
+            if (_isFeeChopperOff()) _enableFeeChopper();
         }
+
         _innerBalances[sender] = _innerBalances[sender].sub(td.sendingInnerAmount);
         _innerBalances[receiver] = _innerBalances[receiver].add(td.receivingInnerAmount);
         _balances[receiver] = _balances[receiver].add(td.receivingAmount);
@@ -197,9 +192,9 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         private
         returns (uint256, uint256, uint256)
     {
-        if (_feeChopperIsOn()) {
-            if (_mustTakeNDistributeFees(td.sendingInnerAmount)) {
-                _enableFees();
+        if (_isFeeChopperOn) {
+            if (_checkMustTakeNDistributeFees(td.sendingInnerAmount)) {
+                _disableFeeChopper();
             } else {
                 td.receivingAmount = td.sendingAmount;
                 td.receivingInnerAmount = td.sendingInnerAmount;
@@ -220,9 +215,9 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         private
         returns (uint256, uint256, uint256)
     {
-        if (_feeChopperIsOn()) {
-            if (_mustTakeNDistributeFees(td.innerFee)) {
-                _enableFees();
+        if (_isFeeChopperOn) {
+            if (_checkMustTakeNDistributeFees(td.innerFee)) {
+                _disableFeeChopper();
             } else {
                 td.receivingAmount = td.sendingAmount;
                 td.receivingInnerAmount = td.sendingInnerAmount;
@@ -240,15 +235,6 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         return (td.receivingAmount, td.fee, td.innerFee);
     }
 
-    function _stopFees() private {
-        _lastRateBeforeChopperIsOn = _getCurrentReflectionRate();
-        _isFeeChopperOn = true;
-    }
-
-    function _enableFees() private {
-        _isFeeChopperOn = false;
-    }
-
     function _increaseExcludedValues(uint256 amount, uint256 innerAmount) private {
         _excludedAmount = _excludedAmount.add(amount);
         _excludedInnerAmount = _excludedInnerAmount.add(innerAmount);
@@ -260,25 +246,32 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
     }
 
     function _reflectFee(uint256 innerFee, uint256 outerFee) private {
-        // !
         uint256 newInnerTotalSupply = _innerTotalSupply.sub(innerFee);
         // Can only be called when can take and distribute fees
-        if (newInnerTotalSupply < _excludedInnerAmount) {
-            _stopFees();
+        if (_excludedInnerAmount > newInnerTotalSupply ) {
+            _enableFeeChopper();
         } else {
             _innerTotalSupply = newInnerTotalSupply;
             _feeDistributedTotal = _feeDistributedTotal.add(outerFee);
         }
     }
 
-    function _mustNotTakeNDistributeFees(uint256 innerAmount) private view returns (bool) {
-        // Original check from here https://github.com/reflectfinance/reflect-contracts/blob/6a92595bb0ff405c67a6d285d4c064b7f7276e15/contracts/REFLECT.sol#L244,
-        // but instead we return last "valid" rate.
+    function _enableFeeChopper() private {
+        _lastRateBeforeChopperIsOn = _getCurrentReflectionRate();
+        _isFeeChopperOn = true;
+    }
+
+    function _disableFeeChopper() private {
+        _isFeeChopperOn = false;
+    }
+
+    function _checkMustNotTakeNDistributeFees(uint256 innerAmount) private view returns (bool) {
+        // Original check from here https://github.com/reflectfinance/reflect-contracts/blob/6a92595bb0ff405c67a6d285d4c064b7f7276e15/contracts/REFLECT.sol#L244
         uint256 newExcludedInnerAmount = _excludedInnerAmount.add(innerAmount);
         return _innerTotalSupply.sub(newExcludedInnerAmount) < _innerTotalSupply.div(_totalSupply);
     }
 
-    function _mustTakeNDistributeFees(uint256 innerAmount) private view returns (bool) {
+    function _checkMustTakeNDistributeFees(uint256 innerAmount) private view returns (bool) {
         uint256 newExcludedInnerAmount = _excludedInnerAmount.sub(innerAmount);
         return _innerTotalSupply > newExcludedInnerAmount &&
         _innerTotalSupply.sub(newExcludedInnerAmount) > _innerTotalSupply.div(_totalSupply);
@@ -325,17 +318,12 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
     }
 
     // Just to make code more readable
-    function _feeChopperIsOn() private view returns (bool) {
-        return _isFeeChopperOn;
-    }
-
-    // Just to make code more readable
-    function _feeChopperIsOff() private view returns (bool) {
+    function _isFeeChopperOff() private view returns (bool) {
         return !_isFeeChopperOn;
     }
 
     function _getCurrentReflectionRate() private view returns (uint256) {
-        if (_feeChopperIsOn())
+        if (_isFeeChopperOn)
             return _lastRateBeforeChopperIsOn;
         uint256 innerTotalSupply = _innerTotalSupply.sub(_excludedInnerAmount);
         uint256 totalSupply = _totalSupply.sub(_excludedAmount);
