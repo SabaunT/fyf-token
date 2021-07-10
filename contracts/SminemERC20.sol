@@ -124,35 +124,133 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
     /**
      * @dev An override of the classical implementation
      */
-    function _transfer(address sender, address recipient, uint256 amount) internal {
+    function _transfer(address sender, address receiver, uint256 amount) internal {
         require(sender != address(0), "SminemERC20::transfer from the zero address");
-        require(recipient != address(0), "SminemERC20::transfer to the zero address");
+        require(receiver != address(0), "SminemERC20::transfer to the zero address");
         require(amount > 0, "SminemERC20::transfer amount must be greater than zero");
 
         TransferData memory td = _getTransferData(amount);
 
-        _innerBalances[sender] = _innerBalances[sender].sub(td.sendingInnerAmount);
-        _innerBalances[recipient] = _innerBalances[recipient].add(td.receivingInnerAmount);
+        (uint256 receivingAmount, uint256 fee, uint256 innerFee) = (0, 0, 0);
         
-        if (!_isExcluded[sender] && _isExcluded[recipient]) {
-            _balances[recipient] = _balances[recipient].add(td.receivingAmount);
-            _increaseExcludedValues(td.receivingAmount, td.receivingInnerAmount);
-        } else if (_isExcluded[sender] && !_isExcluded[recipient]) {
-            _balances[sender] = _balances[sender].sub(td.sendingAmount);
-            _decreaseExcludedValues(td.sendingAmount, td.sendingInnerAmount);
-        } else if (_isExcluded[sender] && _isExcluded[recipient]) {
-            _balances[sender] = _balances[sender].sub(td.sendingAmount);
-            _balances[recipient] = _balances[recipient].add(td.receivingAmount);
-            _decreaseExcludedValues(td.fee, td.innerFee);
-        }
+        if (!_isExcluded[sender] && _isExcluded[receiver]) {
+            (receivingAmount, fee, innerFee) = _transferToExcluded(sender, receiver, td);
+        } else if (_isExcluded[sender] && !_isExcluded[receiver]) {
+            (receivingAmount, fee, innerFee) = _transferFromExcluded(sender, receiver, td);
+        } else if (_isExcluded[sender] && _isExcluded[receiver]) {
+            (receivingAmount, fee, innerFee) = _transferBothExcluded(sender, receiver, td);
+        } else
+            (receivingAmount, fee, innerFee) = _transferStandard(sender, receiver, td);
 
         // if value `_canTakeNDistributeFees` changes from false to true, because of
         // call to `_increaseExcludedValues`, fee values (inner and outer) will be 0.
         // That is because when `_transfer` was called, fees were off.
-        if (_canTakeNDistributeFees() && td.fee != 0)
-            _reflectFee(td.innerFee, td.fee);
+        if (_feeChopperIsOff() && innerFee != 0)
+            _reflectFee(innerFee, fee);
         _transferCounter.increment();
-        emit Transfer(sender, recipient, td.receivingAmount);
+        emit Transfer(sender, receiver, receivingAmount);
+    }
+
+    function _transferStandard(address sender, address receiver, TransferData memory td)
+        private
+        returns (uint256, uint256, uint256)
+    {
+        if (_feeChopperIsOn()) {
+            td.receivingInnerAmount = td.sendingInnerAmount;
+            td.fee = 0;
+            td.innerFee = 0;
+        }
+        _innerBalances[sender] = _innerBalances[sender].sub(td.sendingInnerAmount);
+        _innerBalances[receiver] = _innerBalances[receiver].add(td.receivingInnerAmount);
+
+        return (td.receivingAmount, td.fee, td.innerFee);
+    }
+
+    function _transferToExcluded(address sender, address receiver, TransferData memory td)
+        private
+        returns (uint256, uint256, uint256)
+    {
+        bool mustNotTakeFee = checkMustNotTakeNDistributeFees(td.receivingInnerAmount);
+        if (mustNotTakeFee) {
+            td.receivingAmount = td.sendingAmount;
+            td.receivingInnerAmount = td.sendingInnerAmount;
+            td.fee = 0;
+            td.innerFee = 0;
+            if (_feeChopperIsOff()) _stopFees();
+        }
+        _innerBalances[sender] = _innerBalances[sender].sub(td.sendingInnerAmount);
+        _innerBalances[receiver] = _innerBalances[receiver].add(td.receivingInnerAmount);
+        _balances[receiver] = _balances[receiver].add(td.receivingAmount);
+
+        _increaseExcludedValues(td.receivingAmount, td.receivingInnerAmount);
+
+        return (td.receivingAmount, td.fee, td.innerFee);
+    }
+
+    function _transferFromExcluded(address sender, address receiver, TransferData memory td)
+        private
+        returns (uint256, uint256, uint256)
+    {
+        if (_feeChopperIsOn()) {
+            if (checkMustTakeNDistributeFees(td.sendingInnerAmount)) {
+                _enableFees();
+            } else {
+                td.receivingAmount = td.sendingAmount;
+                td.receivingInnerAmount = td.sendingInnerAmount;
+                td.fee = 0;
+                td.innerFee = 0;
+            }
+        }
+        _innerBalances[sender] = _innerBalances[sender].sub(td.sendingInnerAmount);
+        _innerBalances[receiver] = _innerBalances[receiver].add(td.receivingInnerAmount);
+        _balances[sender] = _balances[sender].sub(td.sendingAmount);
+
+        _decreaseExcludedValues(td.sendingAmount, td.sendingInnerAmount);
+
+        return (td.receivingAmount, td.fee, td.innerFee);
+    }
+
+    function _transferBothExcluded(address sender, address receiver, TransferData memory td)
+        private
+        returns (uint256, uint256, uint256)
+    {
+        if (_feeChopperIsOn()) {
+            if (checkMustTakeNDistributeFees(td.innerFee)) {
+                _enableFees();
+            } else {
+                td.receivingAmount = td.sendingAmount;
+                td.receivingInnerAmount = td.sendingInnerAmount;
+                td.fee = 0;
+                td.innerFee = 0;
+            }
+        }
+        _innerBalances[sender] = _innerBalances[sender].sub(td.sendingInnerAmount);
+        _innerBalances[receiver] = _innerBalances[receiver].add(td.receivingInnerAmount);
+        _balances[sender] = _balances[sender].sub(td.sendingAmount);
+        _balances[receiver] = _balances[receiver].add(td.receivingAmount);
+
+        _decreaseExcludedValues(td.fee, td.innerFee);
+
+        return (td.receivingAmount, td.fee, td.innerFee);
+    }
+
+    function _stopFees() private {
+        _lastRateBeforeChopperIsOn = _getCurrentReflectionRate();
+        _isFeeChopperOn = true;
+    }
+
+    function _enableFees() private {
+        _isFeeChopperOn = false;
+    }
+
+    function _increaseExcludedValues(uint256 amount, uint256 innerAmount) private {
+        _excludedAmount = _excludedAmount.add(amount);
+        _excludedInnerAmount = _excludedInnerAmount.add(innerAmount);
+    }
+
+    function _decreaseExcludedValues(uint256 amount, uint256 innerAmount) private {
+        _excludedAmount = _excludedAmount.sub(amount);
+        _excludedInnerAmount = _excludedInnerAmount.sub(innerAmount);
     }
 
     function _reflectFee(uint256 innerFee, uint256 outerFee) private {
@@ -167,31 +265,17 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         }
     }
 
-    function _increaseExcludedValues(uint256 amount, uint256 innerAmount) private {
-        // !
-        uint256 newExcludedInnerAmount = _excludedInnerAmount.add(innerAmount);
+    function checkMustNotTakeNDistributeFees(uint256 innerAmount) private view returns (bool) {
         // Original check from here https://github.com/reflectfinance/reflect-contracts/blob/6a92595bb0ff405c67a6d285d4c064b7f7276e15/contracts/REFLECT.sol#L244,
         // but instead we return last "valid" rate.
-        if (_canTakeNDistributeFees() &&
-            _innerTotalSupply.sub(newExcludedInnerAmount) < _innerTotalSupply.div(_totalSupply)
-        ) {
-            _stopFees();
-        }
-        _excludedAmount = _excludedAmount.add(amount);
-        _excludedInnerAmount = newExcludedInnerAmount;
+        uint256 newExcludedInnerAmount = _excludedInnerAmount.add(innerAmount);
+        return _innerTotalSupply.sub(newExcludedInnerAmount) < _innerTotalSupply.div(_totalSupply);
     }
 
-    function _decreaseExcludedValues(uint256 amount, uint256 innerAmount) private {
-        // !
+    function checkMustTakeNDistributeFees(uint256 innerAmount) private view returns (bool) {
         uint256 newExcludedInnerAmount = _excludedInnerAmount.sub(innerAmount);
-        if (_cannotTakeNDistributeFees() &&
-            _innerTotalSupply > newExcludedInnerAmount &&
-            _innerTotalSupply.sub(newExcludedInnerAmount) > _innerTotalSupply.div(_totalSupply)
-        ) {
-            _enableFees();
-        }
-        _excludedAmount = _excludedAmount.sub(amount);
-        _excludedInnerAmount = newExcludedInnerAmount;
+        return _innerTotalSupply > newExcludedInnerAmount &&
+        _innerTotalSupply.sub(newExcludedInnerAmount) > _innerTotalSupply.div(_totalSupply);
     }
 
     function _convertInnerToOuter(uint256 innerAmount) private view returns (uint256) {
@@ -216,10 +300,8 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         );
     }
 
-    function _getTransferDataFromExternalValues(uint256 amount) private view returns (uint256, uint256) {
-        uint256 fee = 0;
-        if (_canTakeNDistributeFees())
-            fee = amount.mul(_feePercent).div(100);
+    function _getTransferDataFromExternalValues(uint256 amount) private pure returns (uint256, uint256) {
+        uint256 fee = amount.mul(_feePercent).div(100);
         uint256 receivingAmount = amount.sub(fee);
         return (receivingAmount, fee);
     }
@@ -236,27 +318,18 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         return (innerSendingAmount, innerReceivingAmount, innerFee);
     }
 
-    function _stopFees() private {
-        _lastRateBeforeChopperIsOn = _getCurrentReflectionRate();
-        _isFeeChopperOn = true;
-    }
-
-    function _enableFees() private {
-        _isFeeChopperOn = false;
-    }
-
     // Just to make code more readable
-    function _cannotTakeNDistributeFees() private view returns (bool) {
+    function _feeChopperIsOn() private view returns (bool) {
         return _isFeeChopperOn;
     }
 
     // Just to make code more readable
-    function _canTakeNDistributeFees() private view returns (bool) {
+    function _feeChopperIsOff() private view returns (bool) {
         return !_isFeeChopperOn;
     }
 
     function _getCurrentReflectionRate() private view returns (uint256) {
-        if (_cannotTakeNDistributeFees())
+        if (_feeChopperIsOn())
             return _lastRateBeforeChopperIsOn;
         uint256 innerTotalSupply = _innerTotalSupply.sub(_excludedInnerAmount);
         uint256 totalSupply = _totalSupply.sub(_excludedAmount);
