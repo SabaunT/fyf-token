@@ -158,11 +158,13 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
     function _reflectFee(uint256 innerFee, uint256 outerFee) private {
         // !
         uint256 newInnerTotalSupply = _innerTotalSupply.sub(innerFee);
+        // Can only be called when can take and distribute fees
         if (newInnerTotalSupply < _excludedInnerAmount) {
             _stopFees();
+        } else {
+            _innerTotalSupply = newInnerTotalSupply;
+            _feeDistributedTotal = _feeDistributedTotal.add(outerFee);
         }
-        _innerTotalSupply = newInnerTotalSupply;
-        _feeDistributedTotal = _feeDistributedTotal.add(outerFee);
     }
 
     function _increaseExcludedValues(uint256 amount, uint256 innerAmount) private {
