@@ -146,7 +146,10 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
             _decreaseExcludedValues(td.fee, td.innerFee);
         }
 
-        if (_canTakeNDistributeFees())
+        // if value `_canTakeNDistributeFees` changes from false to true, because of
+        // call to `_increaseExcludedValues`, fee values (inner and outer) will be 0.
+        // That is because when `_transfer` was called, fees were off.
+        if (_canTakeNDistributeFees() && td.fee != 0)
             _reflectFee(td.innerFee, td.fee);
         _transferCounter.increment();
         emit Transfer(sender, recipient, td.receivingAmount);
@@ -156,8 +159,7 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         // !
         uint256 newInnerTotalSupply = _innerTotalSupply.sub(innerFee);
         if (newInnerTotalSupply < _excludedInnerAmount) {
-            _lastRateBeforeChopperIsOn = _getCurrentReflectionRate();
-            _isFeeChopperOn = true;
+            _stopFees();
         }
         _innerTotalSupply = newInnerTotalSupply;
         _feeDistributedTotal = _feeDistributedTotal.add(outerFee);
@@ -252,7 +254,7 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
     }
 
     function _getCurrentReflectionRate() private view returns (uint256) {
-        if (_isFeeChopperOn)
+        if (_cannotTakeNDistributeFees())
             return _lastRateBeforeChopperIsOn;
         uint256 innerTotalSupply = _innerTotalSupply.sub(_excludedInnerAmount);
         uint256 totalSupply = _totalSupply.sub(_excludedAmount);
