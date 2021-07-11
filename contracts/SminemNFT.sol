@@ -18,6 +18,9 @@ contract SminemNFT is ERC721Full, MinterRole, Ownable {
     uint256 public mintingPerThreshold;
     uint256 public multiplicityOfTokenTransfers;
 
+    uint256 private _transfersBeforeChaningMultiplicity;
+    uint256 private _mintedBeforeChangingMultiplicity;
+
     event TokenAddress(IERC20TransferCounter indexed token);
     event TransferMultiplicity(uint256 indexed num);
     event BaseUri(string indexed baseUri);
@@ -77,6 +80,27 @@ contract SminemNFT is ERC721Full, MinterRole, Ownable {
             "SminemNFT::multiplicity of transfers equals 0"
         );
 
+        uint256 currentMultiplicity = multiplicityOfTokenTransfers;
+        if (num > currentMultiplicity) {
+            // multiply by 1e12 to avoid zero rounding
+            uint256 possibleToMint = getPossibleMintsAmount();
+            if (possibleToMint > 0) {
+                uint256 currentrlyMinted = totalSupply();
+                uint256 transfersForCurrentSupply = (currentrlyMinted.mul(1e12))
+                    .div(mintingPerThreshold)
+                    .mul(currentMultiplicity)    
+                    .div(1e12);
+                transfersForCurrentSupply = transfersForCurrentSupply.mod(currentMultiplicity) == 0 ? 
+                    transfersForCurrentSupply : (
+                        (transfersForCurrentSupply.div(currentMultiplicity)).add(1)
+                    ).mul(currentMultiplicity);
+                _transfersBeforeChaningMultiplicity = _transfersBeforeChaningMultiplicity.add(
+                    transfersForCurrentSupply
+                );
+                _mintedBeforeChangingMultiplicity = _mintedBeforeChangingMultiplicity.add(currentrlyMinted);
+            }
+        }
+
         multiplicityOfTokenTransfers = num;
         emit TransferMultiplicity(num);
     }
@@ -125,19 +149,24 @@ contract SminemNFT is ERC721Full, MinterRole, Ownable {
         return mintedTokenIds;
     }
 
-    // todo при изменении, которое делает невалидной ситуацию с минтом есть пути:
-    // 1) ничего не делать
-    // 2) оставшиеся токены запиши на счет (pending), уменьши  getNumberOfTransfers на величину
-    // до изменения. (Это в случае увеличения mintingPerThreshold)
-    // 3) .. 
+    // [Warning]: never call on-chain. Call only using web3 "call" method!
+    function tokensOfOwner(address user) external view returns (uint256[] memory ownerTokens) {
+        uint256 tokenAmount = balanceOf(user);
+        if (tokenAmount == 0) {
+            return new uint256[](0);
+        } else {
+            uint256[] memory output = new uint256[](tokenAmount);
+            for (uint256 index = 0; index < tokenAmount; index++) {
+                output[index] = tokenOfOwnerByIndex(user, index);
+            }
+            return output;
+        }
+    }
+
     function getPossibleMintsAmount() public view returns (uint256) {
-        // todo zero rounding (63*100/5 and 1260//100 * 5)
-        uint256 possibleTimesToMint = token.getNumberOfTransfers().div(multiplicityOfTokenTransfers);
-        uint256 actualMints = totalSupply();
-        // Could happen when `mintingPerThreshold` decreases too much, or
-        // when `multiplicityOfTokenTransfers` increases too much
-        if (mintingPerThreshold.mul(possibleTimesToMint) < actualMints)
-            return 0;
+        uint256 transferAmount = token.getNumberOfTransfers().sub(_transfersBeforeChaningMultiplicity);
+        uint256 possibleTimesToMint = transferAmount.div(multiplicityOfTokenTransfers);
+        uint256 actualMints = totalSupply().sub(_mintedBeforeChangingMultiplicity);
         return (mintingPerThreshold.mul(possibleTimesToMint)).sub(actualMints);
     }
 

@@ -20,7 +20,7 @@ contract('SminemNFT token', async(accounts) => {
 
     // If available to mint amount is 0 and we want to mint more X, the transfers amount
     // should be adjusted to + (X/tokensMintedPerThreshold) * multiplicityOfTokenTransfers
-    let definePossibleMints = async (v) => {
+    let adjustPossibleMints = async (v) => {
         let currentTransferAmount = await erc20Token.getNumberOfTransfers();
         let diff = Math.floor((v*multiplicityOfTokenTransfers)/tokensMintedPerThreshold);
         await erc20Token.setTransferAmount(currentTransferAmount.toNumber() + diff);
@@ -60,7 +60,7 @@ contract('SminemNFT token', async(accounts) => {
         await expectThrow(
             SminemNFT.new(erc20Token.address, 10, "", 0, {from: owner})
         );
-        nftToken = await SminemNFT.new(erc20Token.address, 10, "http://domain.cool/", 5, {from: owner});
+        nftToken = await SminemNFT.new(erc20Token.address, multiplicityOfTokenTransfers, "http://domain.cool/", tokensMintedPerThreshold, {from: owner});
     })
 
     it("Setting transfer amount in ERC20", async() => {
@@ -151,7 +151,7 @@ contract('SminemNFT token', async(accounts) => {
 
 
     it("Successfully minting 50 NFTS", async() => {
-        await definePossibleMints(50);
+        await adjustPossibleMints(50);
         let possibleMintsBefore = await nftToken.getPossibleMintsAmount();
         assert.equal(possibleMintsBefore.toNumber(), 50);
 
@@ -182,18 +182,52 @@ contract('SminemNFT token', async(accounts) => {
         assert.equal(possibleMintsAfterSecondCall.toNumber(), 0);
     })
 
+    it("Failing partial mint of 20 tokens, because multiplicity goes too high", async () => {
+        await adjustPossibleMints(20);
+        let possibleMintsBefore = await nftToken.getPossibleMintsAmount();
+        assert.equal(possibleMintsBefore.toNumber(), 20);
+
+        let receivers = Array(possibleMintsBefore.toNumber());
+        receivers.fill(account1, 0, 10);
+        receivers.fill(account2, 10, 15);
+        receivers.fill(account3, 15);
+
+        // Mint 8 of tokens
+        // doesn't change the state
+        let ids = await nftToken.mint.call(receivers.slice(0, 8), {from: owner});
+        // changes the state
+        // all minted to the account1
+        await nftToken.mint(receivers.slice(0, 8), {from: owner});
+        let possibleMintsAfterFirstCall = await nftToken.getPossibleMintsAmount();
+
+        assert.equal(ids.length, 8);
+        assert.equal(possibleMintsAfterFirstCall.toNumber(), 20-ids.length);
+
+        // Changing multiplicity - making it very hight
+        await nftToken.setTransfersMultiplicity(200, {from: owner});
+        multiplicityOfTokenTransfers = 200;
+
+        // Multiplicity changed, can't mint so many tokens now
+        await expectThrow(
+            nftToken.mint(receivers.slice(8), {from: owner})
+        )
+
+        ids = await nftToken.mint.call(receivers.slice(8, 13), {from: owner});
+        await nftToken.mint(receivers.slice(8, 13), {from: owner});
+        let possibleMintsAfterSecondCall = await nftToken.getPossibleMintsAmount();
+        assert.equal(ids.length, 5);
+        assert.equal(possibleMintsAfterSecondCall.toNumber(), 0);
+    })
 
 
     /**
      * Вектора:
-     * 1. К минту доступно 5*100 (setTransfers, getPossbileMints);
      * 1.4. Частичный минт одной части, изменение кратности вверх
-     * 1.4.1. Изменение сильно высоко (чтобы удариться в то, что уменьшаемое больше вычитаемого
-     * 1.4.2. Несильное изменение
-         * 1.3. Частичный минт одной части, изменение кратности вниз
-         * 1.5. Частичнй минт одной части, изменение количество токенов за раз вниз
-         * 1.6. Частичный минт одной части, изменение количества токенов за раз вверх
-         * 1.7. Тот же самый тест, только изменяя и один параметр, и другой.
+         * 1.4.2. Несильное изменение
+     * 1.3. Частичный минт одной части, изменение кратности вниз
+     * 1.5. Частичнй минт одной части, изменение количество токенов за раз вниз
+     * 1.6. Частичный минт одной части, изменение количества токенов за раз вверх
+     * 1.7. Тот же самый тест, только изменяя и один параметр, и другой.
      * 2 Отправка контрактам
          * 2.1. Минт в пользу, у которого нет рисивера, должен не удасться (erc20 токену)
          * 2.2. Задеплой такой же контракт и сминть ему - должно получиться
