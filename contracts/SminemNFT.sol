@@ -82,23 +82,17 @@ contract SminemNFT is ERC721Full, MinterRole, Ownable {
 
         uint256 currentMultiplicity = multiplicityOfTokenTransfers;
         if (num > currentMultiplicity) {
-            // multiply by 1e12 to avoid zero rounding
-            uint256 possibleToMint = getPossibleMintsAmount();
-            if (possibleToMint > 0) {
-                uint256 currentrlyMinted = totalSupply();
-                uint256 transfersForCurrentSupply = (currentrlyMinted.mul(1e12))
-                    .div(mintingPerThreshold)
-                    .mul(currentMultiplicity)    
-                    .div(1e12);
-                transfersForCurrentSupply = transfersForCurrentSupply.mod(currentMultiplicity) == 0 ? 
-                    transfersForCurrentSupply : (
-                        (transfersForCurrentSupply.div(currentMultiplicity)).add(1)
-                    ).mul(currentMultiplicity);
-                _transfersBeforeChaningMultiplicity = _transfersBeforeChaningMultiplicity.add(
-                    transfersForCurrentSupply
-                );
-                _mintedBeforeChangingMultiplicity = _mintedBeforeChangingMultiplicity.add(currentrlyMinted);
-            }
+            uint256 mintedWithCurrentMultiplicity = _getMintedDuringCurrentMultiplicity();
+            uint256 transfersForMintedWithCurrentMultiplicity = _getMinimumTransfersForMintAmount(
+                mintedWithCurrentMultiplicity
+            );
+            _transfersBeforeChaningMultiplicity = _transfersBeforeChaningMultiplicity.add(
+                transfersForMintedWithCurrentMultiplicity
+            );
+            // todo equal to totalSupply?
+            _mintedBeforeChangingMultiplicity = _mintedBeforeChangingMultiplicity.add(
+                mintedWithCurrentMultiplicity
+            );
         }
 
         multiplicityOfTokenTransfers = num;
@@ -164,9 +158,8 @@ contract SminemNFT is ERC721Full, MinterRole, Ownable {
     }
 
     function getPossibleMintsAmount() public view returns (uint256) {
-        uint256 transferAmount = token.getNumberOfTransfers().sub(_transfersBeforeChaningMultiplicity);
-        uint256 possibleTimesToMint = transferAmount.div(multiplicityOfTokenTransfers);
-        uint256 actualMints = totalSupply().sub(_mintedBeforeChangingMultiplicity);
+        uint256 possibleTimesToMint = _actualTransfersAmount().div(multiplicityOfTokenTransfers);
+        uint256 actualMints = _getMintedDuringCurrentMultiplicity();
         return (mintingPerThreshold.mul(possibleTimesToMint)).sub(actualMints);
     }
 
@@ -176,5 +169,27 @@ contract SminemNFT is ERC721Full, MinterRole, Ownable {
         require(
             _checkOnERC721Received(address(0), to, tokenId, ""),
             "SminemNFT::transfer to non ERC721Receiver implementer");
+    }
+
+    function _actualTransfersAmount() private view returns(uint256) {
+        return token.getNumberOfTransfers().sub(_transfersBeforeChaningMultiplicity);
+    }
+
+    function _getMintedDuringCurrentMultiplicity() private view returns (uint256) {
+        return totalSupply().sub(_mintedBeforeChangingMultiplicity);
+    }
+
+    function _getMinimumTransfersForMintAmount(uint256 amount) private view returns (uint256) {
+        uint256 currentMultiplicity = multiplicityOfTokenTransfers;
+        // multiply by 1e12 to avoid zero rounding
+        uint256 transfersForMintedWithCurrentMultiplicity = (amount.mul(1e12))
+            .div(mintingPerThreshold)
+            .mul(currentMultiplicity)    
+            .div(1e12);
+        transfersForMintedWithCurrentMultiplicity = transfersForMintedWithCurrentMultiplicity.mod(currentMultiplicity) == 0 ? 
+            transfersForMintedWithCurrentMultiplicity : (
+                (transfersForMintedWithCurrentMultiplicity.div(currentMultiplicity)).add(1)
+            ).mul(currentMultiplicity);
+        return transfersForMintedWithCurrentMultiplicity;
     }
 }

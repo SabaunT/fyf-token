@@ -1,3 +1,5 @@
+const { assert } = require("chai");
+
 const SminemERC20CounterSetter = artifacts.require("TransferCounterSetter");
 const SminemNFT = artifacts.require("SminemNFT");
 
@@ -25,6 +27,8 @@ contract('SminemNFT token', async(accounts) => {
         let diff = Math.floor((v*multiplicityOfTokenTransfers)/tokensMintedPerThreshold);
         await erc20Token.setTransferAmount(currentTransferAmount.toNumber() + diff);
     }
+
+    let expectedAmountOfMints
 
     let expectThrow = async (promise) => {
         try {
@@ -196,7 +200,6 @@ contract('SminemNFT token', async(accounts) => {
         // doesn't change the state
         let ids = await nftToken.mint.call(receivers.slice(0, 8), {from: owner});
         // changes the state
-        // all minted to the account1
         await nftToken.mint(receivers.slice(0, 8), {from: owner});
         let possibleMintsAfterFirstCall = await nftToken.getPossibleMintsAmount();
 
@@ -219,11 +222,75 @@ contract('SminemNFT token', async(accounts) => {
         assert.equal(possibleMintsAfterSecondCall.toNumber(), 0);
     })
 
+    describe("Tests with increasing multiplicity", async() => {
+        // So total amount of transfers now is 1520
+        // We changed multiplicity to 200. This made countable amount of transfers
+        // for new multiplicity on the level of 1520-1300 - 220.
+        // For the 220 transfers we minted 5 NFTs.
+        // Changing multiplicity to 250 here should not affect anyhow. 
+
+        it("Making multiplicity higher while having 0 availbale mints and low amount of transfers", async () => {
+            // Changing multiplicity - making it little higher
+            await nftToken.setTransfersMultiplicity(250, {from: owner});
+            multiplicityOfTokenTransfers = 250;
+    
+            let possibleMints = await nftToken.getPossibleMintsAmount();
+            assert.equal(possibleMints.toNumber(), 0)
+        })
+
+        it("Partial minting tokens making a little higher multiplicity", async () => {
+            await adjustPossibleMints(35);
+            // Token Transfers amount = 1520 + (35//5)*250 = 1500 + 1750 = 3270
+            let transfers = await erc20Token.getNumberOfTransfers();
+            assert.equal(transfers.toNumber(), 3270);
+
+            await nftToken.mint(Array(5).fill(account1), {from: owner});
+
+            let possibleMints = await nftToken.getPossibleMintsAmount();
+            // In accordance to logic in SminemNFT: ((3270 - 1500)//200) * 5 - 5
+            assert.equal(possibleMints.toNumber(), 30);
+
+            // Changing multiplicity - making it little higher
+            await nftToken.setTransfersMultiplicity(300, {from: owner});
+            multiplicityOfTokenTransfers = 300;
+
+            possibleMints = await nftToken.getPossibleMintsAmount();
+            // In accordance to logic in SminemNFT: 
+            // Minted while multiplicity 250: 5
+            // Transfers for the minted amount: 5//5 * 250 = 250
+            // Possible mints for multiplicity 300: ((3270 - 1500-250)//300) * 5
+            assert.equal(possibleMints.toNumber(), 25);
+
+            let receivers = Array(possibleMints.toNumber());
+            receivers.fill(account1, 0, 10);
+            receivers.fill(account2, 10, 15);
+            receivers.fill(account3, 15);
+
+            // doesn't change the state
+            let ids = await nftToken.mint.call(receivers, {from: owner});
+            // changes the state
+            await nftToken.mint(receivers, {from: owner});
+            let possibleMintsAfterCall = await nftToken.getPossibleMintsAmount();
+            assert.equal(ids.length, 25);
+            assert.equal(possibleMintsAfterCall.toNumber(), 0);
+        })
+
+        it("Changing to a higher multiplicity while having a large transfer amount in current multiplicity", async() => {
+            // Changing multiplicity - making it little higher
+            await nftToken.setTransfersMultiplicity(400, {from: owner});
+            multiplicityOfTokenTransfers = 400;
+
+            // Transfers for mulitplicity 300: 3270 - 1750 = 1520.
+            // Min amount for minting 25 NFTs: 25//5 * 300 = 1500.
+            // Transfers for multiplicity 400: 3270-1750-1500 = 20.
+            let possibleMintsAfterCall = await nftToken.getPossibleMintsAmount();
+            assert.equal(possibleMintsAfterCall.toNumber(), 0);
+        })
+    })
+
 
     /**
      * Вектора:
-     * 1.4. Частичный минт одной части, изменение кратности вверх
-         * 1.4.2. Несильное изменение
      * 1.3. Частичный минт одной части, изменение кратности вниз
      * 1.5. Частичнй минт одной части, изменение количество токенов за раз вниз
      * 1.6. Частичный минт одной части, изменение количества токенов за раз вверх
