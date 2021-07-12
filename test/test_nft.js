@@ -19,13 +19,13 @@ contract('SminemNFT token', async(accounts) => {
     let nftToken;
 
     let multiplicityOfTokenTransfers = 150;
-    let tokensMintedPerThreshold = 10;
+    let mintingPerThreshold = 10;
 
     // If available to mint amount is 0 and we want to mint more X, the transfers amount
-    // should be adjusted to + (X/tokensMintedPerThreshold) * multiplicityOfTokenTransfers
+    // should be adjusted to + (X/mintingPerThreshold) * multiplicityOfTokenTransfers
     let adjustPossibleMints = async (v) => {
         let currentTransferAmount = await erc20Token.getNumberOfTransfers();
-        let diff = Math.floor((v*multiplicityOfTokenTransfers)/tokensMintedPerThreshold);
+        let diff = Math.floor((v*multiplicityOfTokenTransfers)/mintingPerThreshold);
         await erc20Token.setTransferAmount(currentTransferAmount.toNumber() + diff);
     }
 
@@ -63,7 +63,7 @@ contract('SminemNFT token', async(accounts) => {
         await expectThrow(
             SminemNFT.new(erc20Token.address, 10, "", 0, {from: owner})
         );
-        nftToken = await SminemNFT.new(erc20Token.address, multiplicityOfTokenTransfers, "http://domain.cool/", tokensMintedPerThreshold, {from: owner});
+        nftToken = await SminemNFT.new(erc20Token.address, multiplicityOfTokenTransfers, "http://domain.cool/", mintingPerThreshold, {from: owner});
     })
 
     it("Setting transfer amount in ERC20", async() => {
@@ -120,26 +120,30 @@ contract('SminemNFT token', async(accounts) => {
     it("Failing to set minted per threshold value", async() => {
         // invalid access
         await expectThrow(
-            nftToken.setTokensMintedPerThreshold(20, {from: account1})
+            nftToken.setNewTokensMintingPerThreshold(20, {from: account1})
         );
         // zero value
         await expectThrow(
-            nftToken.setNewTransfersMultiplicity(0, {from: owner})
+            nftToken.setNewTokensMintingPerThreshold(0, {from: owner})
+        );
+        // same value
+        await expectThrow(
+            nftToken.setNewTokensMintingPerThreshold(mintingPerThreshold, {from: owner})
         );
     })
 
     it("Change multiplicity and minted per threshold amount", async() => {
         multiplicityOfTokenTransfers = 100
-        tokensMintedPerThreshold = 5
+        mintingPerThreshold = 5
 
         await nftToken.setNewTransfersMultiplicity(multiplicityOfTokenTransfers, {from: owner});
-        await nftToken.setTokensMintedPerThreshold(tokensMintedPerThreshold, {from: owner});
+        await nftToken.setNewTokensMintingPerThreshold(mintingPerThreshold, {from: owner});
 
         let multiplicity = await nftToken.multiplicityOfTokenTransfers();
-        let mintingPerThreshold = await nftToken.mintingPerThreshold();
+        let _mintingPerThreshold = await nftToken.mintingPerThreshold();
 
         assert.equal(multiplicityOfTokenTransfers, multiplicity);
-        assert.equal(tokensMintedPerThreshold, mintingPerThreshold);
+        assert.equal(mintingPerThreshold, _mintingPerThreshold);
     })
 
     it("Failing to mint", async() => {

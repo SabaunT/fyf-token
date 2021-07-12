@@ -101,8 +101,8 @@ contract SminemNFT is ERC721Full, MinterRole, Ownable {
         emit TransferMultiplicity(num);
     }
 
-    // todo set new
-    function setTokensMintedPerThreshold(uint256 num) external onlyOwner {
+    function setNewTokensMintingPerThreshold(uint256 num) external onlyOwner {
+        require(num != mintingPerThreshold, "SminemNFT::setting the same minting per threshold value");
         require(
             num > 0,
             "SminemNFT::nfts minted per transfers amount reaching threshold equals 0"
@@ -114,10 +114,10 @@ contract SminemNFT is ERC721Full, MinterRole, Ownable {
 
     /**
     * Every time transfers on `token` is multiple of `multiplicityOfTokenTransfers`,
-    * you can mint `tokensMintedPerThreshold`.
+    * you can mint `mintingPerThreshold`.
     *
     * For example, totally X amount of NFTs were minted. Transfers on `token` reached amount of Y.
-    * So you can mint: `tokensMintedPerThreshold` * (Y//`multiplicityOfTokenTransfers`) - X.
+    * So you can mint: `mintingPerThreshold` * (Y//`multiplicityOfTokenTransfers`) - X.
     *
     */
     function mint(address[] calldata receivers) external onlyMinter returns (uint256[] memory) {
