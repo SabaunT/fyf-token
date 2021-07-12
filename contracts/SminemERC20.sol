@@ -58,6 +58,7 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         emit Transfer(address(0), _msgSender(), _totalSupply);
     }
 
+    // Exclude list: founders, big initial stake holders, deployers, liquidity pools.
     function excludeAccount(address account) external onlyOwner {
         require(address(0) != account, "SminemERC20::excluding zero address");
         require(!_isExcluded[account], "SminemERC20::account is already excluded");
@@ -203,6 +204,7 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         return reflectedTotalSupply.div(totalSupply);
     }
 
+    // Say about reaching excluded>included (for inner and outer)
     function _getCurrentSupplyValues() private view returns (uint256, uint256) {
         uint256 innerTotalSupply = _innerTotalSupply;
         uint256 totalSupply = _totalSupply;
