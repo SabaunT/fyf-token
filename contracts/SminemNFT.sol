@@ -73,8 +73,8 @@ contract SminemNFT is ERC721Full, MinterRole, Ownable {
         emit BaseUri(_baseUri);
     }
 
-    // todo set new
-    function setTransfersMultiplicity(uint256 num) external onlyOwner {
+    function setNewTransfersMultiplicity(uint256 num) external onlyOwner {
+        require(num != multiplicityOfTokenTransfers, "SminemNFT::setting same multiplicity value");
         require(
             num > 0,
             "SminemNFT::multiplicity of transfers equals 0"

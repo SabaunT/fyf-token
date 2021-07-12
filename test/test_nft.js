@@ -18,8 +18,8 @@ contract('SminemNFT token', async(accounts) => {
     let erc20Token;
     let nftToken;
 
-    let multiplicityOfTokenTransfers = 100;
-    let tokensMintedPerThreshold = 5;
+    let multiplicityOfTokenTransfers = 150;
+    let tokensMintedPerThreshold = 10;
 
     // If available to mint amount is 0 and we want to mint more X, the transfers amount
     // should be adjusted to + (X/tokensMintedPerThreshold) * multiplicityOfTokenTransfers
@@ -28,8 +28,6 @@ contract('SminemNFT token', async(accounts) => {
         let diff = Math.floor((v*multiplicityOfTokenTransfers)/tokensMintedPerThreshold);
         await erc20Token.setTransferAmount(currentTransferAmount.toNumber() + diff);
     }
-
-    let expectedAmountOfMints
 
     let expectThrow = async (promise) => {
         try {
@@ -92,11 +90,15 @@ contract('SminemNFT token', async(accounts) => {
     it("Failing to set multiplicity value", async() => {
         // invalid access
         await expectThrow(
-            nftToken.setTransfersMultiplicity(20, {from: account1})
+            nftToken.setNewTransfersMultiplicity(20, {from: account1})
         );
         // zero value
         await expectThrow(
-            nftToken.setTransfersMultiplicity(0, {from: owner})
+            nftToken.setNewTransfersMultiplicity(0, {from: owner})
+        );
+        // same value
+        await expectThrow(
+            nftToken.setNewTransfersMultiplicity(multiplicityOfTokenTransfers, {from: owner})
         );
     })
 
@@ -107,12 +109,15 @@ contract('SminemNFT token', async(accounts) => {
         );
         // zero value
         await expectThrow(
-            nftToken.setTransfersMultiplicity(0, {from: owner})
+            nftToken.setNewTransfersMultiplicity(0, {from: owner})
         );
     })
 
     it("Change multiplicity and minted per threshold amount", async() => {
-        await nftToken.setTransfersMultiplicity(multiplicityOfTokenTransfers, {from: owner});
+        multiplicityOfTokenTransfers = 100
+        tokensMintedPerThreshold = 5
+        
+        await nftToken.setNewTransfersMultiplicity(multiplicityOfTokenTransfers, {from: owner});
         await nftToken.setTokensMintedPerThreshold(tokensMintedPerThreshold, {from: owner});
 
         let multiplicity = await nftToken.multiplicityOfTokenTransfers();
@@ -208,7 +213,7 @@ contract('SminemNFT token', async(accounts) => {
         assert.equal(possibleMintsAfterFirstCall.toNumber(), 20-ids.length);
 
         // Changing multiplicity - making it very hight
-        await nftToken.setTransfersMultiplicity(200, {from: owner});
+        await nftToken.setNewTransfersMultiplicity(200, {from: owner});
         multiplicityOfTokenTransfers = 200;
 
         // Multiplicity changed, can't mint so many tokens now
@@ -231,7 +236,7 @@ contract('SminemNFT token', async(accounts) => {
         // Changing multiplicity to 250 here should not affect anyhow. 
         it("Making multiplicity higher while having 0 availbale mints and low amount of transfers", async () => {
             // Changing multiplicity - making it little higher
-            await nftToken.setTransfersMultiplicity(250, {from: owner});
+            await nftToken.setNewTransfersMultiplicity(250, {from: owner});
             multiplicityOfTokenTransfers = 250;
     
             let possibleMints = await nftToken.getPossibleMintsAmount();
@@ -251,7 +256,7 @@ contract('SminemNFT token', async(accounts) => {
             assert.equal(possibleMints.toNumber(), 30);
 
             // Changing multiplicity - making it little higher
-            await nftToken.setTransfersMultiplicity(300, {from: owner});
+            await nftToken.setNewTransfersMultiplicity(300, {from: owner});
             multiplicityOfTokenTransfers = 300;
 
             possibleMints = await nftToken.getPossibleMintsAmount();
@@ -277,7 +282,7 @@ contract('SminemNFT token', async(accounts) => {
 
         it("Changing to a higher multiplicity while having a large transfer amount in current multiplicity", async() => {
             // Changing multiplicity - making it little higher
-            await nftToken.setTransfersMultiplicity(500, {from: owner});
+            await nftToken.setNewTransfersMultiplicity(500, {from: owner});
             multiplicityOfTokenTransfers = 500;
 
             // Transfers for mulitplicity 300: 3270 - 1750 = 1520.
@@ -291,7 +296,7 @@ contract('SminemNFT token', async(accounts) => {
     describe("Tests with decreasing multiplicity", async() => {
         it("Changing to a lower multiplicity while having a small amount of transfers in current multiplicity", async() => {
             // Changing multiplicity - making it little lower
-            await nftToken.setTransfersMultiplicity(400, {from: owner});
+            await nftToken.setNewTransfersMultiplicity(400, {from: owner});
             multiplicityOfTokenTransfers = 400;
 
             // no changes in available for multiplicity transfers state
@@ -315,7 +320,7 @@ contract('SminemNFT token', async(accounts) => {
             assert.equal(possibleMints.toNumber(), 20);
 
             // Changing multiplicity - making it 2 times lower
-            await nftToken.setTransfersMultiplicity(200, {from: owner});
+            await nftToken.setNewTransfersMultiplicity(200, {from: owner});
             multiplicityOfTokenTransfers = 200;
 
             possibleMints = await nftToken.getPossibleMintsAmount();
@@ -343,11 +348,25 @@ contract('SminemNFT token', async(accounts) => {
 
         it("Making multiplicity lower while having 0 availbale mints and a high mumber of transfers for current multiplicity", async () => {
             // Changing multiplicity - making it little higher
-            await nftToken.setTransfersMultiplicity(100, {from: owner});
+            await nftToken.setNewTransfersMultiplicity(100, {from: owner});
             multiplicityOfTokenTransfers = 100;
     
             let possibleMints = await nftToken.getPossibleMintsAmount();
             assert.equal(possibleMints.toNumber(), 0)
+        })
+    })
+
+    describe("Testing sending to contracts", async() => {
+        it("Should fail minting to contract, which isn't a NFT receiver", async() => {
+            await adjustPossibleMints(5);
+            await expectThrow(   
+                nftToken.mint(Array(5).fill(erc20Token.address), {from: owner})
+            )
+        })
+
+        it("Successful minting to contract, which is a NFT receiver", async() => {
+            let nftReceiver = await NFTReceiver.new({from: account1});
+            nftToken.mint(Array(5).fill(nftReceiver.address), {from: owner})
         })
     })
 
