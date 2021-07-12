@@ -7,16 +7,19 @@ import "openzeppelin-solidity/contracts/token/ERC20/ERC20Detailed.sol";
 import "openzeppelin-solidity/contracts/drafts/Counters.sol";
 
 /**
- * @dev Implementation of the deflationary mechanism within ERC20 token based on
+ * @title Frictionless yield farming token.
+ * @author SabaunT https://github.com/SabaunT.
+ * @notice Distributes between holders fees taken from each transfer.
+ * The "inner" and "outer" value and all the other terms not described here
+ * are explained in `README.md`.
+ * @dev Implementation is pretty much the same as here:
  * https://github.com/reflectfinance/reflect-contracts/blob/main/contracts/REFLECT.sol.
- *
- * Term "actual" regarding token balance means a token balance of an account with earned
- * fees from transactions made by token holders. This balance isn't stored anywhere, but
- * it's calculated using the reflection rate and reflected balance of an account.
+ * Still there are some differences about excluding and including accounts and some other stuff.
  */
 contract FYFToken is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
     using Counters for Counters.Counter;
 
+    // Convenience type for a more neat transfer logic implementation.
     struct TransferData {
         uint256 amount;
         uint256 cleanedAmount;
@@ -26,16 +29,23 @@ contract FYFToken is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         uint256 innerFee;
     }
 
+    // Percent of transfer amount distributed between token holders.
     uint256 private constant _feePercent = 1;
 
+    // Balances excluded from earning fees. For more details read {FYFToken-excludeAccount}.
     mapping (address => bool) private _isExcluded;
+    // Inner representation of the original ERC20 `_balances`.
     mapping(address => uint256) private _innerBalances;
 
+    // Counter of transfers. Used by contracts, which interact with IERC20TransferCounter.
     Counters.Counter internal _transferCounter;
 
+    // Total fees distributed, the "outer" value.
     uint256 private _feeDistributedTotal;
     uint256 private _innerTotalSupply;
+    // Sum of balances of excluded accounts (outer value).
     uint256 private _excludedAmount;
+    // Sum of balances of excluded accounts (inner value).
     uint256 private _excludedInnerAmount;
 
     event AccountExcluded(address indexed account);
@@ -58,7 +68,30 @@ contract FYFToken is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         emit Transfer(address(0), _msgSender(), _totalSupply);
     }
 
-    // Exclude list: founders, big initial stake holders, deployers, liquidity pools.
+    /**
+     * @dev Excludes account from earning fees.
+     *
+     * Account exclusion mustn't change the rate. Exclusion could be used to
+     * take an opportunity of earning fees from addresses, which can potentially
+     * centralize fee distribution. These are:
+     * - liquidity pools,
+     * - exchanges,
+     * - founders,
+     * - big stake holders
+     * - and e.t.c.
+     *
+     * If a balance is excluded, it manages not only it's inner balance, but the outer as well.
+     * This allows not calculating a proper rate for excluded addresses to convert their inner
+     * balances to the outer representation without fees.
+     *
+     * Emits a {AccountExcluded} event.
+     *
+     * Requirements:
+     *
+     * - `account` cannot be the zero address.
+     * - `account` cannot be excluded.
+     * - `msg.sender` is the owner.
+     */
     function excludeAccount(address account) external onlyOwner {
         require(address(0) != account, "FYFToken::excluding zero address");
         require(!_isExcluded[account], "FYFToken::account is already excluded");
@@ -76,6 +109,24 @@ contract FYFToken is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         emit AccountExcluded(account);
     }
 
+    /**
+     * @dev Includes excluded account to earning fees protocol.
+     *
+     * Account inclusion mustn't change the rate. If account inclusion changes
+     * the rate we can face situation when all other included balances get a lower
+     * outer balance after the function call.
+     *
+     * Function changes inner representation of the outer balance, resetting it
+     * using the current rate. If it's not done, then we will face the bug, described
+     * earlier.
+     *
+     * Emits a {AccountIncluded} event.
+     *
+     * Requirements:
+     *
+     * - `account` - must be excluded
+     * - `msg.sender` is the owner.
+     */
     function includeAccount(address account) external onlyOwner {
         require(_isExcluded[account], "FYFToken::account is not excluded");
 
@@ -93,29 +144,65 @@ contract FYFToken is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         emit AccountIncluded(account);
     }
 
+    /**
+     * @dev Get's the number of transfers made in the contract.
+     */
     function getNumberOfTransfers() external view returns (uint256) {
         return _transferCounter.current();
     }
 
-    function isExcluded(address account) external view returns (bool) {
-        return _isExcluded[account];
-    }
-
+    /**
+     * @dev Returns total amount of fees, distributed between holders.
+     *
+     * Values is shown in outer dimension.
+     */
     function totalFees() external view returns (uint256) {
         return _feeDistributedTotal;
     }
 
     /**
-     * @dev An override of the classical implementation
+     * @dev An override of the classical implementation.
+     *
+     * For more details why excluded accounts show the outer representation without
+     * dividing inner by rate read {FYFToken-excludeAccount}.
      */
     function balanceOf(address account) public view returns (uint256) {
-        if (_isExcluded[account])
+        if (isExcluded(account))
             return ERC20.balanceOf(account);
         return _convertInnerToActual(_innerBalances[account]);
     }
 
     /**
-     * @dev An override of the classical implementation
+     * @dev Shows whether an account is excluded.
+     *
+     * Requirements:
+     *
+     * - `account` cannot be the zero address.
+     */
+    function isExcluded(address account) public view returns (bool) {
+        require(address(0) != account, "FYFToken::zero address can't be excluded");
+        return _isExcluded[account];
+    }
+
+    /**
+     * @dev An override of the classical implementation.
+     *
+     * Transfers `amount` in a way depending on whether `sender` and `receiver`
+     * are excluded or not. If participant is excluded, then his outer balance
+     * is changes as well. Sending to excluded account increases excluded amount.
+     * An opposite logic is when excluded account sends to the "included" one. Also
+     * excluded amount gets lower when there is a transfer between excluded accounts,
+     * because an amount (fee) of the excluded senders balance is distributed between
+     * included holders.
+     *
+     * Emits a {Transfer} event.
+     *
+     * Requirements:
+     *
+     * - `sender` cannot be the zero address.
+     * - `recipient` cannot be the zero address.
+     * - `sender` must have a balance of at least `amount`.
+     * - `amount` cannot be zero.
      */
     function _transfer(address sender, address recipient, uint256 amount) internal {
         require(sender != address(0), "FYFToken::transfer from the zero address");
@@ -139,33 +226,56 @@ contract FYFToken is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
             _decreaseExcludedValues(td.fee, td.innerFee);
         }
 
-        _reflectFee(td.innerFee, td.fee);
+        _distributeFee(td.innerFee, td.fee);
         _transferCounter.increment();
         emit Transfer(sender, recipient, td.cleanedAmount);
     }
 
-    function _reflectFee(uint256 innerFee, uint256 outerFee) private {
+    /**
+     * @dev Distributes fee.
+     *
+     * For more info look at `README.md`.
+     */
+    function _distributeFee(uint256 innerFee, uint256 outerFee) private {
         _innerTotalSupply = _innerTotalSupply.sub(innerFee);
         _feeDistributedTotal = _feeDistributedTotal.add(outerFee);
     }
 
+    /**
+     * @dev Increases excluded amounts.
+     *
+     * Called when an account is excluded or a transfer to excluded account was done.
+     */
     function _increaseExcludedValues(uint256 amount, uint256 innerAmount) private {
         _excludedAmount = _excludedAmount.add(amount);
         _excludedInnerAmount = _excludedInnerAmount.add(innerAmount);
     }
 
+    /**
+     * @dev Decreases excluded amounts.
+     *
+     * Called when an account is included, a transfer from excluded account or between excluded
+     * accounts was done.
+     */
     function _decreaseExcludedValues(uint256 amount, uint256 innerAmount) private {
         _excludedAmount = _excludedAmount.sub(amount);
         _excludedInnerAmount = _excludedInnerAmount.sub(innerAmount);
     }
 
+    /**
+     * @dev Performs conversion between inner and outer balances
+     */
     function _convertInnerToActual(uint256 innerAmount) private view returns (uint256) {
         uint256 rate = _getCurrentReflectionRate();
         return innerAmount.div(rate);
     }
 
+    /**
+     * @dev Gets from transferring amount a fee amount, an amount cleaned from fees and their
+     * inner representations.
+     */
     function _getTransferData(uint256 amount) private view returns (TransferData memory) {
-        (uint256 tokenCleanedAmount, uint256 tokenFee) = _getTransferDataWithExternalValues(amount);
+        (uint256 tokenCleanedAmount, uint256 tokenFee) = _getTransferDataWithOuterValues(amount);
         (
             uint256 innerAmount,
             uint256 innerCleanedAmount,
@@ -181,12 +291,18 @@ contract FYFToken is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         );
     }
 
-    function _getTransferDataWithExternalValues(uint256 amount) private pure returns (uint256, uint256) {
+    /**
+     * @dev Gets outer transfer data.
+     */
+    function _getTransferDataWithOuterValues(uint256 amount) private pure returns (uint256, uint256) {
         uint256 fee = amount.mul(_feePercent).div(100);
         uint256 cleanedAmount = amount.sub(fee);
         return (cleanedAmount, fee);
     }
 
+    /**
+     * @dev Gets inner transfer data from outer transfer data.
+     */
     function _getTransferDataWithInnerValues(uint256 amount, uint256 fee)
         private
         view
@@ -199,12 +315,30 @@ contract FYFToken is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         return (innerAmount, innerCleanedAmount, innerFee);
     }
 
+    /**
+     * @dev Gets conversion rate between inner and outer balances.
+     */
     function _getCurrentReflectionRate() private view returns (uint256) {
         (uint256 reflectedTotalSupply, uint256 totalSupply) = _getCurrentSupplyValues();
         return reflectedTotalSupply.div(totalSupply);
     }
 
-    // Say about reaching excluded>included (for inner and outer)
+    /**
+     * @dev Gets supply values for rate calculation.
+     *
+     * Inner and outer total supply values are subtracted by inner and excluded amounts,
+     * which are sums of balances of excluded accounts.
+     *
+     * The original implementation here: https://github.com/reflectfinance/reflect-contracts/blob/main/contracts/REFLECT.sol#L236
+     * checks excluded values being less than supply values. Although these checks aren't required, because
+     * reaching such situations seems unrealistic due to contract usage, the check `_excludedAmount < _totalSupply`
+     * should be provided if `FYFToken` is going to be featured with burning mechanism (deflation).
+     *
+     * For example for this check https://github.com/reflectfinance/reflect-contracts/blob/main/contracts/REFLECT.sol#L244,
+     * an implementation of the FYFToken was provided here https://github.com/SabaunT/fyf-token/tree/fix-for-supply-values.
+     * The idea here is to stop distributing fees and to freeze the rate.
+     * [WARNING] The fix-for-supply-values branch isn't fully tested.
+     */
     function _getCurrentSupplyValues() private view returns (uint256, uint256) {
         uint256 innerTotalSupply = _innerTotalSupply;
         uint256 totalSupply = _totalSupply;
@@ -214,9 +348,4 @@ contract FYFToken is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
 
         return (innerTotalSupply, totalSupply);
     }
-
-    // [DOCS] check if this is ever called (also exclude and include) on etherscan address from here
-    //https://perafinance.medium.com/safemoon-is-it-safe-though-a-detailed-explanation-of-frictionless-yield-bug-338710649846
-    // https://etherscan.io/tx/0xad155519128e701aded6b82bea62039d82d1eda5dd1ddb504c296696965b5a62
-    // reflect fn can be added with proxy - state in docs
 }
