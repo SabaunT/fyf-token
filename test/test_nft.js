@@ -72,6 +72,21 @@ contract('SminemNFT token', async(accounts) => {
         assert.equal(transferAmount.toNumber(), 120);
     })
 
+    it("Failing to set base Uri", async() => {
+        // invalid access
+        await expectThrow(
+            nftToken.setNewBaseUri("random string", {from: account1})
+        );
+        // same string
+        await expectThrow(
+            nftToken.setNewBaseUri("http://domain.cool/", {from: owner})
+        );
+        // empty string
+        await expectThrow(
+            nftToken.setNewBaseUri("", {from: owner})
+        );
+    })
+
     it("Failing to set token address", async() => {
         // invalid access
         await expectThrow(
@@ -116,7 +131,7 @@ contract('SminemNFT token', async(accounts) => {
     it("Change multiplicity and minted per threshold amount", async() => {
         multiplicityOfTokenTransfers = 100
         tokensMintedPerThreshold = 5
-        
+
         await nftToken.setNewTransfersMultiplicity(multiplicityOfTokenTransfers, {from: owner});
         await nftToken.setTokensMintedPerThreshold(tokensMintedPerThreshold, {from: owner});
 

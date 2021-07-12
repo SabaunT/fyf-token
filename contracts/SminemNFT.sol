@@ -65,8 +65,11 @@ contract SminemNFT is ERC721Full, MinterRole, Ownable {
         emit TokenAddress(_token);
     }
 
-    // todo set new
-    function setBaseUri(string calldata _baseUri) external onlyOwner {
+    function setNewBaseUri(string calldata _baseUri) external onlyOwner {
+        require(
+            keccak256(abi.encodePacked(_baseUri)) != keccak256(abi.encodePacked(baseUri)),
+            "SminemNFT::setting the same base uri value"
+        );
         require(bytes(_baseUri).length > 0, "SminemNFT::empty base uri string");
 
         baseUri = _baseUri;
@@ -74,7 +77,10 @@ contract SminemNFT is ERC721Full, MinterRole, Ownable {
     }
 
     function setNewTransfersMultiplicity(uint256 num) external onlyOwner {
-        require(num != multiplicityOfTokenTransfers, "SminemNFT::setting same multiplicity value");
+        require(
+            num != multiplicityOfTokenTransfers,
+            "SminemNFT::setting the same multiplicity value"
+        );
         require(
             num > 0,
             "SminemNFT::multiplicity of transfers equals 0"
