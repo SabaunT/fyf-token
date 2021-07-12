@@ -85,28 +85,22 @@ contract SminemNFT is ERC721Full, MinterRole, Ownable {
             num > 0,
             "SminemNFT::multiplicity of transfers equals 0"
         );
-        uint256 mintedWithCurrentMultiplicity = _getMintedDuringCurrentMultiplicity();
-        uint256 transfersForMintedWithCurrentMultiplicity = _getMinimumTransfersForMintAmount(
-            mintedWithCurrentMultiplicity
-        );
-        _transfersBeforeChaningMultiplicity = _transfersBeforeChaningMultiplicity.add(
-            transfersForMintedWithCurrentMultiplicity
-        );
-        // todo equal to totalSupply?
-        _mintedBeforeChangingMultiplicity = _mintedBeforeChangingMultiplicity.add(
-            mintedWithCurrentMultiplicity
-        );
+        _updateTransfersAndMintDataBeforeChange();
 
         multiplicityOfTokenTransfers = num;
         emit TransferMultiplicity(num);
     }
 
     function setNewTokensMintingPerThreshold(uint256 num) external onlyOwner {
-        require(num != mintingPerThreshold, "SminemNFT::setting the same minting per threshold value");
+        require(
+            num != mintingPerThreshold,
+            "SminemNFT::setting the same minting per threshold value"
+        );
         require(
             num > 0,
             "SminemNFT::nfts minted per transfers amount reaching threshold equals 0"
         );
+        _updateTransfersAndMintDataBeforeChange();
 
         mintingPerThreshold = num;
         emit TokensMintedPerCall(num);
@@ -124,7 +118,7 @@ contract SminemNFT is ERC721Full, MinterRole, Ownable {
         // The upper bound is set to 30, which is < 5'000'000 gas.
         require(
             receivers.length <= 30,
-            "SminemNFT::can't mint more than 255 tokens at once"
+            "SminemNFT::can't mint more than 30 tokens at once"
         );
         require(
             receivers.length <= getPossibleMintsAmount(),
@@ -170,7 +164,23 @@ contract SminemNFT is ERC721Full, MinterRole, Ownable {
         ERC721Enumerable._mint(to, tokenId);
         require(
             _checkOnERC721Received(address(0), to, tokenId, ""),
-            "SminemNFT::transfer to non ERC721Receiver implementer");
+            "SminemNFT::transfer to non ERC721Receiver implementer contract");
+    }
+
+    function _updateTransfersAndMintDataBeforeChange() private {
+        uint256 mintedWithCurrentMultiplicity = _getMintedDuringCurrentMultiplicity();
+        uint256 transfersForMintedWithCurrentMultiplicity = _getMinimumTransfersForMintAmount(
+            mintedWithCurrentMultiplicity
+        );
+        if (transfersForMintedWithCurrentMultiplicity > 0) {
+            _transfersBeforeChaningMultiplicity = _transfersBeforeChaningMultiplicity.add(
+                transfersForMintedWithCurrentMultiplicity
+            );
+            // todo equal to totalSupply?
+            _mintedBeforeChangingMultiplicity = _mintedBeforeChangingMultiplicity.add(
+                mintedWithCurrentMultiplicity
+            );
+        }
     }
 
     function _actualTransfersAmount() private view returns(uint256) {
@@ -182,16 +192,19 @@ contract SminemNFT is ERC721Full, MinterRole, Ownable {
     }
 
     function _getMinimumTransfersForMintAmount(uint256 amount) private view returns (uint256) {
-        uint256 currentMultiplicity = multiplicityOfTokenTransfers;
-        // multiply by 1e12 to avoid zero rounding
-        uint256 transfersForMintedWithCurrentMultiplicity = (amount.mul(1e12))
-            .div(mintingPerThreshold)
-            .mul(currentMultiplicity)    
-            .div(1e12);
-        transfersForMintedWithCurrentMultiplicity = transfersForMintedWithCurrentMultiplicity.mod(currentMultiplicity) == 0 ? 
-            transfersForMintedWithCurrentMultiplicity : (
-                (transfersForMintedWithCurrentMultiplicity.div(currentMultiplicity)).add(1)
-            ).mul(currentMultiplicity);
-        return transfersForMintedWithCurrentMultiplicity;
+        if (amount > 0) {
+            uint256 currentMultiplicity = multiplicityOfTokenTransfers;
+            // multiply by 1e12 to avoid zero rounding
+            uint256 transfersForMintedWithCurrentMultiplicity = (amount.mul(1e12))
+                .div(mintingPerThreshold)
+                .mul(currentMultiplicity)    
+                .div(1e12);
+            transfersForMintedWithCurrentMultiplicity = transfersForMintedWithCurrentMultiplicity.mod(currentMultiplicity) == 0 ? 
+                transfersForMintedWithCurrentMultiplicity : (
+                    (transfersForMintedWithCurrentMultiplicity.div(currentMultiplicity)).add(1)
+                ).mul(currentMultiplicity);
+            return transfersForMintedWithCurrentMultiplicity;
+        }
+        return 0;
     }
 }

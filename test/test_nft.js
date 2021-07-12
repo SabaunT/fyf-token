@@ -354,24 +354,134 @@ contract('SminemNFT token', async(accounts) => {
             receivers.fill(account2, 20, 35);
             receivers.fill(account3, 35);
 
-            // changes the state
             await nftToken.mint(receivers.slice(0, maxMintAtOnce), {from: owner});
             // doesn't change the state
             ids = await nftToken.mint.call(receivers.slice(maxMintAtOnce), {from: owner});
-            // changes the state
             await nftToken.mint(receivers.slice(maxMintAtOnce), {from: owner});
             possibleMints = await nftToken.getPossibleMintsAmount();
             assert.equal(ids.length, 10);
             assert.equal(possibleMints.toNumber(), 0);
         })
 
-        it("Making multiplicity lower while having 0 availbale mints and a high mumber of transfers for current multiplicity", async () => {
+        it("Making multiplicity lower while having 0 availbale mints and a high number of transfers for current multiplicity", async () => {
             // Changing multiplicity - making it little higher
             await nftToken.setNewTransfersMultiplicity(100, {from: owner});
             multiplicityOfTokenTransfers = 100;
     
             let possibleMints = await nftToken.getPossibleMintsAmount();
             assert.equal(possibleMints.toNumber(), 0)
+        })
+    })
+
+    describe("Testing with changing value of minting per threshold", async() => {
+        it("Partial minting with decreasing", async() => {
+            // 75/5 * 100 = 1500
+            // Transfers amount = 7270 + 1500 = 8770
+            await adjustPossibleMints(75);
+            let numOfTransfers = await erc20Token.getNumberOfTransfers();
+            assert.equal(numOfTransfers.toNumber(), 8770);
+
+            // changes the state
+            await nftToken.mint(Array(maxMintAtOnce).fill(account1), {from: owner});
+            await nftToken.mint(Array(maxMintAtOnce).fill(account2), {from: owner});
+
+            // Changing multiplicity - making it 5 times lower
+            await nftToken.setNewTokensMintingPerThreshold(1, {from: owner});
+            mintingPerThreshold = 1;
+
+            let possibleMints = await nftToken.getPossibleMintsAmount();
+            // In accordance to logic in SminemNFT: 
+            // Minted while minting per threshold 5: 60
+            // Transfers for the minted amount 60: 60//5 * 100 = 1200
+            // Possible mints minting per threshold 1: ((8770 - 3250 - 2400 - 1600 - 1200)//100) * 1 = 3
+            assert.equal(possibleMints.toNumber(), 3);
+
+            await nftToken.mint(Array(3).fill(account3), {from: owner});
+            possibleMints = await nftToken.getPossibleMintsAmount();
+            assert.equal(possibleMints.toNumber(), 0);
+        })
+
+        it("Partial minting with increasing value", async() => {
+            // 75*100 = 7500
+            // Transfers amount = 8770 + 7500 = 16270
+            await adjustPossibleMints(75);
+            let numOfTransfers = await erc20Token.getNumberOfTransfers();
+            assert.equal(numOfTransfers.toNumber(), 16270);
+
+            // changes the state
+            await nftToken.mint(Array(maxMintAtOnce).fill(account1), {from: owner})
+
+            // Changing multiplicity - making it 4 times bigger
+            await nftToken.setNewTokensMintingPerThreshold(4, {from: owner});
+            mintingPerThreshold = 4;
+
+            let possibleMints = await nftToken.getPossibleMintsAmount();
+            // In accordance to logic in SminemNFT: 
+            // Minted while minting per threshold 1: 3+30
+            // Transfers for the minted amount 33: 33//1 * 100 = 3300
+            // Possible mints minting per threshold 4: ((16270 - 8450 - 3300)//100) * 4 = 180
+            assert.equal(possibleMints.toNumber(), 180);
+        })
+    })
+
+    describe("Testing with changing both parameters of mint", async() => {
+        it("Partial minting with increasing multiplicity and lowering minting per threshold", async() => {
+            await nftToken.mint(Array(maxMintAtOnce).fill(account1), {from: owner})
+            await nftToken.mint(Array(maxMintAtOnce).fill(account2), {from: owner})
+            await nftToken.mint(Array(maxMintAtOnce).fill(account3), {from: owner})
+
+            let possibleMints = await nftToken.getPossibleMintsAmount();
+            assert.equal(possibleMints.toNumber(), 90);
+
+            await nftToken.setNewTransfersMultiplicity(150, {from: owner});
+            multiplicityOfTokenTransfers = 150;
+
+            possibleMints = await nftToken.getPossibleMintsAmount();
+            // Minted while minting per multiplicity 100: 90
+            // Transfers for the minted amount 90: 90//4 * 100 = 2250 (but used 2300, 
+            // because to mint 90 tokens you should be able to mint 92 -> 2300. 
+            // [2200, 2300) is about ability to mint up to 88 tokens)
+            // Possible mints for multiplicity 150: ((16270 - 8450 - 3300 - 2300)//150) * 4 = 56
+            assert.equal(possibleMints.toNumber(), 56);
+
+            await nftToken.mint(Array(maxMintAtOnce).fill(account1), {from: owner})
+
+            await nftToken.setNewTokensMintingPerThreshold(2, {from: owner});
+            mintingPerThreshold = 2;
+            
+            possibleMints = await nftToken.getPossibleMintsAmount();
+            // Minted while minting per multiplicity 150: 30
+            // Transfers for the minted amount 30: 30/4 * 150 = 1175 (but 1200 was used 
+            // for the same reason, as described upper).
+            // Possible mints for minting per threshold 2: ((16270 - 8450 - 3300 - 2300 - 1200)//150) * 2 = 12
+            assert.equal(possibleMints.toNumber(), 12);
+
+            await nftToken.mint(Array(12).fill(account2), {from: owner})
+
+            possibleMints = await nftToken.getPossibleMintsAmount();
+            assert.equal(possibleMints.toNumber(), 0);
+        })
+
+        it("Changing both params in any order gives the same result", async() => {
+            // just to test it while being able to mint not only 0 NFTs
+            await adjustPossibleMints(35);
+
+            await nftToken.setNewTransfersMultiplicity(300, {from: owner});
+            await nftToken.setNewTokensMintingPerThreshold(1, {from: owner});
+
+            let possibleMints1 = await nftToken.getPossibleMintsAmount();
+
+            // undoing changes
+            await nftToken.setNewTransfersMultiplicity(150, {from: owner});
+            await nftToken.setNewTokensMintingPerThreshold(2, {from: owner});
+
+            // new order
+            await nftToken.setNewTokensMintingPerThreshold(1, {from: owner});
+            await nftToken.setNewTransfersMultiplicity(300, {from: owner});
+
+            let possibleMints2 = await nftToken.getPossibleMintsAmount();
+
+            assert.equal(possibleMints1.toNumber(), possibleMints2.toNumber())
         })
     })
 
@@ -388,11 +498,4 @@ contract('SminemNFT token', async(accounts) => {
             nftToken.mint(Array(5).fill(nftReceiver.address), {from: owner})
         })
     })
-
-    /**
-     * Вектора:
-     * 1.5. Частичнй минт одной части, изменение количество токенов за раз вниз
-     * 1.6. Частичный минт одной части, изменение количества токенов за раз вверх
-     * 1.7. Тот же самый тест, только изменяя и один параметр, и другой.
-     * */
 })
