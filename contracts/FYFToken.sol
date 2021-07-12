@@ -263,7 +263,7 @@ contract FYFToken is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
     }
 
     /**
-     * @dev Performs conversion between inner and outer balances
+     * @dev Performs conversion between inner and outer balances.
      */
     function _convertInnerToActual(uint256 innerAmount) private view returns (uint256) {
         uint256 rate = _getCurrentReflectionRate();
