@@ -79,21 +79,17 @@ contract SminemNFT is ERC721Full, MinterRole, Ownable {
             num > 0,
             "SminemNFT::multiplicity of transfers equals 0"
         );
-
-        uint256 currentMultiplicity = multiplicityOfTokenTransfers;
-        if (num > currentMultiplicity) {
-            uint256 mintedWithCurrentMultiplicity = _getMintedDuringCurrentMultiplicity();
-            uint256 transfersForMintedWithCurrentMultiplicity = _getMinimumTransfersForMintAmount(
-                mintedWithCurrentMultiplicity
-            );
-            _transfersBeforeChaningMultiplicity = _transfersBeforeChaningMultiplicity.add(
-                transfersForMintedWithCurrentMultiplicity
-            );
-            // todo equal to totalSupply?
-            _mintedBeforeChangingMultiplicity = _mintedBeforeChangingMultiplicity.add(
-                mintedWithCurrentMultiplicity
-            );
-        }
+        uint256 mintedWithCurrentMultiplicity = _getMintedDuringCurrentMultiplicity();
+        uint256 transfersForMintedWithCurrentMultiplicity = _getMinimumTransfersForMintAmount(
+            mintedWithCurrentMultiplicity
+        );
+        _transfersBeforeChaningMultiplicity = _transfersBeforeChaningMultiplicity.add(
+            transfersForMintedWithCurrentMultiplicity
+        );
+        // todo equal to totalSupply?
+        _mintedBeforeChangingMultiplicity = _mintedBeforeChangingMultiplicity.add(
+            mintedWithCurrentMultiplicity
+        );
 
         multiplicityOfTokenTransfers = num;
         emit TransferMultiplicity(num);
