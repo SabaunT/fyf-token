@@ -1,6 +1,6 @@
 const { assert } = require("chai");
 
-const SminemERC20CounterSetter = artifacts.require("TransferCounterSetter");
+const FYFCounterSetter = artifacts.require("TransferCounterSetter");
 const SminemNFT = artifacts.require("SminemNFT");
 const NFTReceiver = artifacts.require("NFTReceiver");
 
@@ -46,7 +46,7 @@ contract('SminemNFT token', async(accounts) => {
     };
 
     before("Deploying NFT token", async() => {
-        erc20Token = await SminemERC20CounterSetter.new({from: owner});
+        erc20Token = await FYFCounterSetter.new({from: owner});
         // zero token address
         await expectThrow(
             SminemNFT.new(zeroAddress, 1, "basicUri", 5, {from: owner})

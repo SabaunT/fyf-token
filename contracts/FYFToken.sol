@@ -14,7 +14,7 @@ import "openzeppelin-solidity/contracts/drafts/Counters.sol";
  * fees from transactions made by token holders. This balance isn't stored anywhere, but
  * it's calculated using the reflection rate and reflected balance of an account.
  */
-contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
+contract FYFToken is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
     using Counters for Counters.Counter;
 
     struct TransferData {
@@ -46,9 +46,9 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
         ERC20Detailed(name, symbol, decimals)
         public
     {
-        require(bytes(name).length > 0, "SminemERC20::empty token name string");
-        require(bytes(symbol).length > 0, "SminemERC20::empty token name string");
-        require(decimals != 0, "SminemERC20::decimals can't be zero");
+        require(bytes(name).length > 0, "FYFToken::empty token name string");
+        require(bytes(symbol).length > 0, "FYFToken::empty token name string");
+        require(decimals != 0, "FYFToken::decimals can't be zero");
 
         _totalSupply = supply * 10**uint256(decimals);
         uint256 _MAX = ~uint256(0);
@@ -60,8 +60,8 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
 
     // Exclude list: founders, big initial stake holders, deployers, liquidity pools.
     function excludeAccount(address account) external onlyOwner {
-        require(address(0) != account, "SminemERC20::excluding zero address");
-        require(!_isExcluded[account], "SminemERC20::account is already excluded");
+        require(address(0) != account, "FYFToken::excluding zero address");
+        require(!_isExcluded[account], "FYFToken::account is already excluded");
 
         uint256 innerBalance = _innerBalances[account];
         if (innerBalance > 0) {
@@ -77,7 +77,7 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
     }
 
     function includeAccount(address account) external onlyOwner {
-        require(_isExcluded[account], "SminemERC20::account is not excluded");
+        require(_isExcluded[account], "FYFToken::account is not excluded");
 
         uint256 rate = _getCurrentReflectionRate();
         uint256 balance = _balances[account];
@@ -118,9 +118,9 @@ contract SminemERC20 is Ownable, ERC20Detailed, ERC20, IERC20TransferCounter {
      * @dev An override of the classical implementation
      */
     function _transfer(address sender, address recipient, uint256 amount) internal {
-        require(sender != address(0), "SminemERC20::transfer from the zero address");
-        require(recipient != address(0), "SminemERC20::transfer to the zero address");
-        require(amount > 0, "SminemERC20::transfer amount must be greater than zero");
+        require(sender != address(0), "FYFToken::transfer from the zero address");
+        require(recipient != address(0), "FYFToken::transfer to the zero address");
+        require(amount > 0, "FYFToken::transfer amount must be greater than zero");
 
         TransferData memory td = _getTransferData(amount);
 

@@ -1,10 +1,10 @@
 const { BN } = require('openzeppelin-test-helpers');
 
-const SminemERC20 = artifacts.require('SminemERC20');
+const FYFToken = artifacts.require('FYFToken');
 
-contract('SminemERC20 token', async function (accounts) {
+contract('FYFToken token', async function (accounts) {
     // constructor params
-    const name = "SminemERC20";
+    const name = "FYFToken";
     const symbol = "SMNM";
     const decimals = 9;
 
@@ -73,18 +73,18 @@ contract('SminemERC20 token', async function (accounts) {
     before("preparing env", async() => {
         // empty name
         await expectThrow(
-            SminemERC20.new("", symbol, decimals, 1, {from: owner})
+            FYFToken.new("", symbol, decimals, 1, {from: owner})
         );
         // empty symbol
         await expectThrow(
-            SminemERC20.new(name, "", decimals, 1, {from: owner})
+            FYFToken.new(name, "", decimals, 1, {from: owner})
         );
         // zero decimal
         await expectThrow(
-            SminemERC20.new(name, symbol, 0, 1, {from: owner})
+            FYFToken.new(name, symbol, 0, 1, {from: owner})
         );
 
-        tokenInst = await SminemERC20.new(
+        tokenInst = await FYFToken.new(
             name,
             symbol,
             decimals,
