@@ -113,4 +113,5 @@ npx truffle test --show-events --network development
 Make sure you have npx package installed globally.
 
 ## TODO:
+1. Деплой прокси контракта. Ресерчи прокси и как их деплоить.
 2. Посмотри, что делают проекты после деплоя. К примеру, они могут делать renounceOwnership и т.п. вещи делать. Посмотри на etherscan.
